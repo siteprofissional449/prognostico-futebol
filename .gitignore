@@ -1,0 +1,19 @@
+# Dependências e build
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+
+# Ambiente — NUNCA enviar senhas (use só .env.example)
+.env
+.env.*
+!.env.example
+
+# Logs e SO
+*.log
+.DS_Store
+Thumbs.db
+
+# IDE (opcional — descomente se não quiser versionar)
+# .vscode/
+# .idea/
