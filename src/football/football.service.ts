@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import { PredictionsService } from '../predictions/predictions.service';
@@ -14,6 +14,14 @@ interface ApiMatch {
     market: string;
     outcomes: Array<{ name: string; odds: string }>;
   }>;
+}
+
+type PredictionMarket = 'HOME_WIN' | 'DRAW' | 'AWAY_WIN';
+
+interface AiPredictionItem {
+  matchId: number;
+  market: PredictionMarket;
+  confidence: number; // 0..100
 }
 
 /** Partida com placar (resultado) - estrutura football-data.org v4 */
@@ -54,7 +62,10 @@ export interface MatchDetailDto extends MatchResultDto {
 
 @Injectable()
 export class FootballService {
+  private readonly logger = new Logger(FootballService.name);
   private readonly apiKey: string;
+  private readonly openAiKey: string;
+  private readonly openAiModel: string;
   private readonly baseUrl = 'https://api.football-data.org/v4';
 
   constructor(
@@ -62,6 +73,8 @@ export class FootballService {
     private readonly predictionsService: PredictionsService,
   ) {
     this.apiKey = this.config.get<string>('FOOTBALL_API_KEY') || '';
+    this.openAiKey = this.config.get<string>('OPENAI_API_KEY') || '';
+    this.openAiModel = this.config.get<string>('OPENAI_MODEL') || 'gpt-4o-mini';
   }
 
   /** IDs das principais ligas do mundo (football-data.org) */
@@ -234,7 +247,9 @@ export class FootballService {
   async generateDailyPredictions(date?: string): Promise<{ count: number }> {
     const targetDate = date || this.predictionsService.today();
     const raw = await this.fetchMatchesWithOdds(targetDate);
-    const predictions = this.buildPredictionsFromMatches(raw, targetDate);
+    const predictions = this.openAiKey
+      ? await this.buildPredictionsWithAi(raw, targetDate)
+      : this.buildPredictionsFromMatches(raw, targetDate);
     await this.predictionsService.clearByDate(targetDate);
     const saved = await this.predictionsService.saveMany(predictions);
     return { count: saved.length };
@@ -362,6 +377,120 @@ export class FootballService {
       });
     }
     return list.sort((a, b) => (b.probability ?? 0) - (a.probability ?? 0));
+  }
+
+  private async buildPredictionsWithAi(
+    matches: ApiMatch[],
+    predictionDate: string,
+  ): Promise<Partial<Prediction>[]> {
+    if (!matches.length || !this.openAiKey) {
+      return this.buildPredictionsFromMatches(matches, predictionDate);
+    }
+
+    try {
+      const inputMatches = matches.slice(0, 30).map((m) => ({
+        matchId: m.id,
+        homeTeam: m.homeTeam.name,
+        awayTeam: m.awayTeam.name,
+        league: m.competition.name,
+        startTime: m.utcDate,
+        odds: this.extractOddsMap(m),
+      }));
+
+      const prompt = [
+        'Você é um analista de apostas esportivas.',
+        'Para cada jogo, escolha EXATAMENTE um mercado entre HOME_WIN, DRAW, AWAY_WIN.',
+        'Retorne APENAS JSON válido, sem markdown e sem texto extra.',
+        'Formato obrigatório:',
+        '{"predictions":[{"matchId":123,"market":"HOME_WIN","confidence":68}]}',
+        'confidence é percentual inteiro de 51 a 95.',
+        'Nunca retorne matchId duplicado.',
+        `Jogos: ${JSON.stringify(inputMatches)}`,
+      ].join('\n');
+
+      const { data } = await axios.post(
+        'https://api.openai.com/v1/chat/completions',
+        {
+          model: this.openAiModel,
+          temperature: 0.2,
+          response_format: { type: 'json_object' },
+          messages: [{ role: 'user', content: prompt }],
+        },
+        {
+          timeout: 25000,
+          headers: {
+            Authorization: `Bearer ${this.openAiKey}`,
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+
+      const content = data?.choices?.[0]?.message?.content;
+      const parsed = this.parseAiPayload(content);
+      const byId = new Map(matches.map((m) => [m.id, m]));
+      const list: Partial<Prediction>[] = [];
+
+      for (const row of parsed) {
+        const match = byId.get(row.matchId);
+        if (!match) continue;
+        const odd = this.pickOddByMarket(match, row.market);
+        if (!odd) continue;
+        const probability = Math.min(0.95, Math.max(0.51, row.confidence / 100));
+        list.push({
+          matchId: String(match.id),
+          homeTeam: match.homeTeam.name,
+          awayTeam: match.awayTeam.name,
+          league: match.competition.name,
+          startTime: new Date(match.utcDate),
+          market: row.market,
+          probability,
+          odd,
+          minPlan: this.probabilityToPlan(probability),
+          predictionDate,
+        });
+      }
+
+      if (list.length) {
+        return list.sort((a, b) => (b.probability ?? 0) - (a.probability ?? 0));
+      }
+    } catch (err) {
+      this.logger.warn(
+        `Falha ao gerar com IA (${this.openAiModel}), usando fallback por odds.`,
+      );
+    }
+
+    return this.buildPredictionsFromMatches(matches, predictionDate);
+  }
+
+  private parseAiPayload(content: string): AiPredictionItem[] {
+    if (!content) return [];
+    try {
+      const json = JSON.parse(content) as { predictions?: AiPredictionItem[] };
+      return (json.predictions || []).filter((p) =>
+        ['HOME_WIN', 'DRAW', 'AWAY_WIN'].includes(p.market),
+      );
+    } catch {
+      return [];
+    }
+  }
+
+  private extractOddsMap(match: ApiMatch): Record<string, number | null> {
+    const outcomes = match.odds?.flatMap((o) => o.outcomes) || [];
+    const home = outcomes.find((o) => o.name === 'Home');
+    const draw = outcomes.find((o) => o.name === 'Draw');
+    const away = outcomes.find((o) => o.name === 'Away');
+    return {
+      HOME_WIN: home ? parseFloat(home.odds) : null,
+      DRAW: draw ? parseFloat(draw.odds) : null,
+      AWAY_WIN: away ? parseFloat(away.odds) : null,
+    };
+  }
+
+  private pickOddByMarket(match: ApiMatch, market: PredictionMarket): number | null {
+    const odds = this.extractOddsMap(match);
+    const value = odds[market];
+    if (!value || Number.isNaN(value) || value <= 1) return null;
+    return value;
   }
 
   private oddToProbability(odd: number): number {

@@ -1,4 +1,11 @@
-const API_BASE = '/api';
+/** Em dev usa o proxy do Vite (/api → localhost:3000). No Vercel defina VITE_API_BASE_URL com a URL da API (Render). */
+function apiBase(): string {
+  const url = import.meta.env.VITE_API_BASE_URL?.trim();
+  if (url) return url.replace(/\/$/, '');
+  return '/api';
+}
+
+const API_BASE = apiBase();
 
 function getToken(): string | null {
   return localStorage.getItem('token');

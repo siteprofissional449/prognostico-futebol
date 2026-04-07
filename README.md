@@ -73,6 +73,17 @@ Sem `FOOTBALL_API_KEY` no `.env`, a API usa **dados mock**. Para dados reais:
 1. Crie uma chave em [Football-Data.org](https://www.football-data.org/).
 2. Coloque no `.env`: `FOOTBALL_API_KEY=sua_chave`.
 
+## IA para gerar palpites (opcional)
+
+Se você informar `OPENAI_API_KEY`, o endpoint `POST /football/generate-today` usa IA
+para escolher o mercado (`HOME_WIN`, `DRAW`, `AWAY_WIN`) e confiança por jogo.
+Sem chave, o sistema continua com o cálculo automático por odds (fallback).
+
+Variáveis:
+
+- `OPENAI_API_KEY=sua_chave_openai`
+- `OPENAI_MODEL=gpt-4o-mini` (ou outro modelo compatível)
+
 ---
 
 ## Como testar o projeto (SmartGol)
