@@ -8,7 +8,6 @@ const planLabels: Record<string, string> = {
   DAILY: 'Diário',
   WEEKLY: 'Semanal',
   PREMIUM: 'Premium',
-  VIP: 'VIP',
 };
 
 const planColors: Record<string, string> = {
@@ -16,7 +15,6 @@ const planColors: Record<string, string> = {
   DAILY: 'cyan',
   WEEKLY: 'blue',
   PREMIUM: 'violet',
-  VIP: 'yellow',
 };
 
 function statusMeta(s: PrognosticStatus) {

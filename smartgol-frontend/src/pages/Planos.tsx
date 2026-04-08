@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   Container,
   Title,
@@ -14,8 +14,10 @@ import {
   Alert,
   Group,
 } from '@mantine/core';
-import { IconCheck, IconCreditCard, IconRocket } from '@tabler/icons-react';
+import { IconCheck, IconCreditCard } from '@tabler/icons-react';
+import { notifications } from '@mantine/notifications';
 import { getPlans } from '../api/plans';
+import { mercadoPagoCheckout } from '../api/payments';
 import type { Plan } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -36,7 +38,11 @@ function billingLabel(p: Plan): string {
 
 export function Planos() {
   const { isLoggedIn } = useAuth();
+  const [searchParams] = useSearchParams();
+  const mpStatus = searchParams.get('mp');
+
   const [plans, setPlans] = useState<Plan[]>([]);
+  const [payingCode, setPayingCode] = useState<string | null>(null);
 
   useEffect(() => {
     getPlans().then(setPlans).catch(() => setPlans([]));
@@ -50,20 +56,42 @@ export function Planos() {
             Planos de membros
           </Title>
           <Text c="dimmed" maw={640}>
-            Grátis, diário, semanal e premium mensal. Os preços vêm da API; o checkout será ligado ao campo{' '}
-            <code>paymentPriceId</code> (Stripe, Mercado Pago, etc.).
+            Assinatura via <strong>Mercado Pago</strong> (checkout seguro). Configure na API:{' '}
+            <code>MERCADOPAGO_ACCESS_TOKEN</code>, <code>API_PUBLIC_URL</code> (webhook) e{' '}
+            <code>FRONTEND_URL</code> (retorno após pagar).
           </Text>
         </div>
-        <Alert variant="light" color="teal" title="Pagamento" icon={<IconCreditCard size={18} />}>
-          Botões de compra ficam desativados até você configurar o gateway e preencher{' '}
-          <strong>paymentProvider</strong> e <strong>paymentPriceId</strong> no banco ou via admin futuro.
+
+        {mpStatus === 'success' && (
+          <Alert color="green" title="Pagamento aprovado">
+            Se o webhook estiver configurado, seu plano será liberado em instantes. Faça login de novo se o menu
+            não atualizar.
+          </Alert>
+        )}
+        {mpStatus === 'pending' && (
+          <Alert color="yellow" title="Pagamento pendente">
+            Aguardando confirmação do Mercado Pago. Você receberá o acesso quando for aprovado.
+          </Alert>
+        )}
+        {mpStatus === 'failure' && (
+          <Alert color="red" title="Pagamento não concluído">
+            Tente novamente ou use outro meio de pagamento.
+          </Alert>
+        )}
+
+        <Alert variant="light" color="blue" title="Mercado Pago" icon={<IconCreditCard size={18} />}>
+          Em produção, use URL <strong>HTTPS</strong> em <code>API_PUBLIC_URL</code> para o webhook funcionar.
+          No painel do Mercado Pago você pode apontar a mesma URL de notificação.
         </Alert>
       </Stack>
 
       <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
         {plans.map((pl) => {
           const isFree = pl.code === 'FREE' || Number(pl.price) === 0;
-          const readyForPayment = !!(pl.paymentPriceId && pl.paymentProvider);
+          const paidCode = pl.code as 'DAILY' | 'WEEKLY' | 'PREMIUM';
+          const canMp =
+            !isFree && ['DAILY', 'WEEKLY', 'PREMIUM'].includes(pl.code);
+
           return (
             <Paper key={pl.id} p="lg" radius="md" withBorder shadow="sm">
               <Group justify="space-between" mb="xs">
@@ -100,33 +128,42 @@ export function Planos() {
                 <List.Item>
                   Ciclo: <strong>{pl.billingPeriod}</strong>
                 </List.Item>
-                {!isFree && (
-                  <>
-                    <List.Item>
-                      Gateway: {pl.paymentProvider || '— (definir depois)'}
-                    </List.Item>
-                    <List.Item>
-                      ID no gateway: {pl.paymentPriceId || '— (definir depois)'}
-                    </List.Item>
-                  </>
+                {!isFree && pl.paymentPriceId && (
+                  <List.Item>
+                    <Text size="xs" c="dimmed">
+                      Opcional: <code>paymentPriceId</code> — checkout usa o preço do plano na API.
+                    </Text>
+                  </List.Item>
                 )}
               </List>
               {isFree ? (
                 <Button component={Link} to="/register" variant="light" fullWidth>
                   Criar conta grátis
                 </Button>
+              ) : !isLoggedIn ? (
+                <Button component={Link} to="/login" state={{ from: '/planos' }} fullWidth variant="filled">
+                  Entrar para assinar
+                </Button>
               ) : (
                 <Button
                   fullWidth
-                  leftSection={<IconRocket size={16} />}
-                  disabled={!readyForPayment}
-                  title={
-                    readyForPayment
-                      ? 'Checkout será ativado na integração'
-                      : 'Configure paymentPriceId e paymentProvider na API'
-                  }
+                  leftSection={<IconCreditCard size={18} />}
+                  loading={payingCode === pl.code}
+                  disabled={!canMp}
+                  onClick={async () => {
+                    setPayingCode(pl.code);
+                    try {
+                      const { url } = await mercadoPagoCheckout(paidCode);
+                      window.location.href = url;
+                    } catch (e) {
+                      const msg =
+                        e instanceof Error ? e.message : 'Não foi possível iniciar o checkout.';
+                      notifications.show({ color: 'red', title: 'Mercado Pago', message: msg });
+                      setPayingCode(null);
+                    }
+                  }}
                 >
-                  {readyForPayment ? 'Assinar (em breve)' : 'Pagamento em configuração'}
+                  Pagar com Mercado Pago
                 </Button>
               )}
             </Paper>

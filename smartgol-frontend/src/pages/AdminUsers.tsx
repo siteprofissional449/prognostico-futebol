@@ -20,7 +20,6 @@ const planOptions: { value: PlanType; label: string }[] = [
   { value: 'DAILY', label: 'Diário (R$ 2,99/dia)' },
   { value: 'WEEKLY', label: 'Semanal (R$ 11,99/semana)' },
   { value: 'PREMIUM', label: 'Premium mensal (R$ 39,99/mês)' },
-  { value: 'VIP', label: 'VIP (legado → trata como Premium)' },
 ];
 
 function formatDate(iso: string | null) {
@@ -60,8 +59,9 @@ export function AdminUsers() {
 
   const openEdit = (u: AdminUserRow) => {
     setEditUser(u);
-    const code = (u.currentPlan?.code as PlanType) || 'FREE';
-    const paid: PlanType[] = ['DAILY', 'WEEKLY', 'PREMIUM', 'VIP'];
+    const raw = (u.currentPlan?.code as string) || 'FREE';
+    const code = (raw === 'VIP' ? 'PREMIUM' : raw) as PlanType;
+    const paid: PlanType[] = ['DAILY', 'WEEKLY', 'PREMIUM'];
     setPlanCode(paid.includes(code) ? code : 'FREE');
     if (u.planExpiresAt) {
       const d = new Date(u.planExpiresAt);

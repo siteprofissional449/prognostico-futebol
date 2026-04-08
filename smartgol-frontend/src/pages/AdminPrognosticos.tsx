@@ -37,7 +37,6 @@ const planOptions: { value: PlanType; label: string }[] = [
   { value: 'DAILY', label: 'Diário' },
   { value: 'WEEKLY', label: 'Semanal' },
   { value: 'PREMIUM', label: 'Premium mensal' },
-  { value: 'VIP', label: 'VIP (legado)' },
 ];
 
 function statusColor(s: PrognosticStatus) {

@@ -9,6 +9,7 @@ import { AuthModule } from './auth/auth.module';
 import { AdminModule } from './admin/admin.module';
 import { PrognosticModule } from './prognostic/prognostic.module';
 import { PremiumModule } from './premium/premium.module';
+import { PaymentsModule } from './payments/payments.module';
 
 /** Aceita true, 1, yes, on (Render e outros painéis variam). */
 function envFlag(name: string): boolean {
@@ -59,6 +60,7 @@ function typeOrmOptions(): TypeOrmModuleOptions {
     AdminModule,
     PrognosticModule,
     PremiumModule,
+    PaymentsModule,
   ],
 })
 export class AppModule {}

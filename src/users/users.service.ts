@@ -1,10 +1,14 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { User } from './user.entity';
 import { PlanType } from '../predictions/prediction.entity';
-import { Plan } from '../plans/plan.entity';
+import { Plan, PlanBillingPeriod } from '../plans/plan.entity';
 
 @Injectable()
 export class UsersService {
@@ -43,8 +47,8 @@ export class UsersService {
     if (!user?.currentPlan) return PlanType.FREE;
     if (user.planExpiresAt && new Date() > user.planExpiresAt)
       return PlanType.FREE;
-    const code = user.currentPlan.code;
-    if (code === 'VIP') return PlanType.PREMIUM;
+    const code =
+      user.currentPlan.code === 'VIP' ? 'PREMIUM' : user.currentPlan.code;
     if (code === 'PREMIUM') return PlanType.PREMIUM;
     if (code === 'WEEKLY') return PlanType.WEEKLY;
     if (code === 'DAILY') return PlanType.DAILY;
@@ -73,13 +77,14 @@ export class UsersService {
     const user = await this.findById(userId);
     if (!user) throw new NotFoundException('Usuário não encontrado');
 
-    const paidCodes = ['DAILY', 'WEEKLY', 'PREMIUM', 'VIP'];
+    const paidCodes = ['DAILY', 'WEEKLY', 'PREMIUM'];
     if (dto.planCode === 'FREE') {
       user.currentPlanId = null;
       user.planExpiresAt = null;
     } else if (dto.planCode && paidCodes.includes(dto.planCode)) {
-      const code = dto.planCode === 'VIP' ? 'PREMIUM' : dto.planCode;
-      const plan = await this.planRepo.findOne({ where: { code } });
+      const plan = await this.planRepo.findOne({
+        where: { code: dto.planCode },
+      });
       if (!plan) throw new NotFoundException('Plano inválido');
       user.currentPlanId = plan.id;
       if (dto.planExpiresAt !== undefined) {
@@ -97,5 +102,43 @@ export class UsersService {
     const updated = await this.findById(userId);
     if (!updated) throw new NotFoundException('Usuário não encontrado');
     return updated;
+  }
+
+  /** Libera assinatura após pagamento aprovado (Mercado Pago, etc.). */
+  async grantSubscriptionByPlanCode(
+    userId: string,
+    planCode: string,
+  ): Promise<void> {
+    const paid = ['DAILY', 'WEEKLY', 'PREMIUM'];
+    if (!paid.includes(planCode)) {
+      throw new BadRequestException('Plano inválido para assinatura.');
+    }
+    const plan = await this.planRepo.findOne({ where: { code: planCode } });
+    if (!plan || Number(plan.price) <= 0) {
+      throw new BadRequestException('Plano não encontrado.');
+    }
+    const until = this.computeExpiryFromBilling(plan.billingPeriod);
+    await this.updateUserAdmin(userId, {
+      planCode,
+      planExpiresAt: until.toISOString(),
+    });
+  }
+
+  private computeExpiryFromBilling(period: PlanBillingPeriod): Date {
+    const d = new Date();
+    switch (period) {
+      case 'DAILY':
+        d.setDate(d.getDate() + 1);
+        break;
+      case 'WEEKLY':
+        d.setDate(d.getDate() + 7);
+        break;
+      case 'MONTHLY':
+        d.setMonth(d.getMonth() + 1);
+        break;
+      default:
+        d.setMonth(d.getMonth() + 1);
+    }
+    return d;
   }
 }

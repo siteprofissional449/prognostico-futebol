@@ -36,7 +36,7 @@ export class PremiumService {
 
   /**
    * Mesma lógica dos prognósticos automáticos: o utilizador vê entradas cujo
-   * plano mínimo é compatível com o plano atual (PREMIUM não vê só-VIP).
+   * plano mínimo do conteúdo é compatível com o plano do usuário.
    */
   async listPrognosticsForPlan(
     userPlan: string,

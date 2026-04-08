@@ -44,19 +44,13 @@ function addDaysLocal(base: Date, delta: number): Date {
 }
 
 function isPaidMember(plan: string | null): boolean {
-  return (
-    plan === 'DAILY' ||
-    plan === 'WEEKLY' ||
-    plan === 'PREMIUM' ||
-    plan === 'VIP'
-  );
+  return plan === 'DAILY' || plan === 'WEEKLY' || plan === 'PREMIUM';
 }
 
 function planDisplayName(plan: string | null): string {
   if (plan === 'DAILY') return 'Diário';
   if (plan === 'WEEKLY') return 'Semanal';
   if (plan === 'PREMIUM') return 'Premium mensal';
-  if (plan === 'VIP') return 'VIP';
   return plan ?? '—';
 }
 
@@ -131,7 +125,7 @@ export function Premium() {
           <Badge
             size="lg"
             variant="light"
-            color={plan === 'VIP' ? 'yellow' : plan === 'PREMIUM' ? 'violet' : 'blue'}
+            color={plan === 'PREMIUM' ? 'violet' : 'blue'}
           >
             Plano ativo: {planDisplayName(plan)}
           </Badge>

@@ -9,7 +9,6 @@ const planLabels: Record<string, string> = {
   DAILY: 'Diário',
   WEEKLY: 'Semanal',
   PREMIUM: 'Premium',
-  VIP: 'VIP',
 };
 
 export function Header() {

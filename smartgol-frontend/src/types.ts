@@ -1,4 +1,4 @@
-export type PlanType = 'FREE' | 'DAILY' | 'WEEKLY' | 'PREMIUM' | 'VIP';
+export type PlanType = 'FREE' | 'DAILY' | 'WEEKLY' | 'PREMIUM';
 
 export interface Prediction {
   id: string;

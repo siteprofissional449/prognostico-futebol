@@ -53,7 +53,16 @@ API em `http://localhost:3000`.
 - **WEEKLY** (R$ 11,99/semana): ainda mais palpites; ciclo semanal.
 - **PREMIUM** (R$ 39,99/mês): todos os palpites automáticos + área Premium de prognósticos manuais.
 
-Na entidade `Plan` existem `paymentProvider` e `paymentPriceId` para integrar Stripe, Mercado Pago, etc.
+Na entidade `Plan` existem `paymentProvider` e `paymentPriceId` (opcionais) para outros gateways.
+
+### Mercado Pago
+
+1. Crie uma aplicação e copie o **Access Token** (teste ou produção).
+2. No `.env`: `MERCADOPAGO_ACCESS_TOKEN`, `API_PUBLIC_URL` (URL HTTPS da API), `FRONTEND_URL` (site Vercel).
+3. **POST** ` /payments/mercadopago/checkout` (com `Authorization: Bearer`) e body `{ "planCode": "DAILY" | "WEEKLY" | "PREMIUM" }` → retorna `{ "url" }` para redirecionar o usuário.
+4. Webhook: **POST** `/payments/mercadopago/webhook` — ao aprovar, o sistema libera o plano e define `planExpiresAt` conforme o ciclo (dia / semana / mês).
+
+Dependência: `mercadopago` (SDK oficial).
 
 ## Gerar prognósticos todos os dias
 
