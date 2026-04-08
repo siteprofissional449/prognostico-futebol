@@ -10,14 +10,19 @@ import { AdminModule } from './admin/admin.module';
 import { PrognosticModule } from './prognostic/prognostic.module';
 import { PremiumModule } from './premium/premium.module';
 
+/** Aceita true, 1, yes, on (Render e outros painéis variam). */
+function envFlag(name: string): boolean {
+  const v = process.env[name]?.trim().toLowerCase();
+  return v === 'true' || v === '1' || v === 'yes' || v === 'on';
+}
+
 function typeOrmOptions(): TypeOrmModuleOptions {
   const synchronize =
-    process.env.DB_SYNC === 'true' || process.env.NODE_ENV !== 'production';
+    envFlag('DB_SYNC') || process.env.NODE_ENV !== 'production';
 
-  const ssl =
-    process.env.DB_SSL === 'true'
-      ? { rejectUnauthorized: false as const }
-      : undefined;
+  const ssl = envFlag('DB_SSL')
+    ? { rejectUnauthorized: false as const }
+    : undefined;
 
   if (process.env.DATABASE_URL?.trim()) {
     return {
