@@ -86,6 +86,26 @@ Variáveis:
 
 ---
 
+## Hospedagem na Railway (API + Postgres)
+
+1. Acesse [railway.app](https://railway.app), entre com GitHub e **New Project** → **Deploy from GitHub** → escolha este repositório.
+2. O serviço deve usar a **raiz do repo** (onde está o `package.json` da API). O arquivo `railway.toml` define build e `npm run start:prod`.
+3. No mesmo projeto, **New** → **Database** → **PostgreSQL**. O Railway expõe **`DATABASE_URL`** no serviço da API:
+   - Abra o serviço **Postgres** → **Variables** → copie `DATABASE_URL`, **ou**
+   - No serviço da **API** → **Variables** → **Add Reference** e referencie `DATABASE_URL` do Postgres (recomendado).
+4. No serviço da API, adicione variáveis (além de `DATABASE_URL`):
+   - `NODE_ENV` = `production`
+   - `DB_SYNC` = `true` **na primeira vez** (cria tabelas). Depois do primeiro deploy OK, mude para `false` ou remova.
+   - `JWT_SECRET` = string longa e aleatória
+   - Opcional: `FOOTBALL_API_KEY`, `OPENAI_API_KEY`, `OPENAI_MODEL`, `ADMIN_EMAIL`
+   - Se a conexão com o Postgres falhar com SSL: `DB_SSL` = `true`
+5. Gere um **domínio público** no serviço da API (Settings → Networking / Generate Domain) e teste `https://SUA-URL.railway.app/plans`.
+6. Na **Vercel** (frontend `smartgol-frontend`), defina `VITE_API_BASE_URL` com essa URL pública, **sem barra no final**.
+
+Pode desativar ou apagar o serviço no Render quando a API na Railway estiver estável, para não pagar/duplicar.
+
+---
+
 ## Como testar o projeto (SmartGol)
 
 1. **Subir o backend**
