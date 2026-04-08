@@ -44,8 +44,10 @@ export class UsersService {
     if (user.planExpiresAt && new Date() > user.planExpiresAt)
       return PlanType.FREE;
     const code = user.currentPlan.code;
-    if (code === 'VIP') return PlanType.VIP;
+    if (code === 'VIP') return PlanType.PREMIUM;
     if (code === 'PREMIUM') return PlanType.PREMIUM;
+    if (code === 'WEEKLY') return PlanType.WEEKLY;
+    if (code === 'DAILY') return PlanType.DAILY;
     return PlanType.FREE;
   }
 
@@ -71,13 +73,13 @@ export class UsersService {
     const user = await this.findById(userId);
     if (!user) throw new NotFoundException('Usuário não encontrado');
 
+    const paidCodes = ['DAILY', 'WEEKLY', 'PREMIUM', 'VIP'];
     if (dto.planCode === 'FREE') {
       user.currentPlanId = null;
       user.planExpiresAt = null;
-    } else if (dto.planCode === 'PREMIUM' || dto.planCode === 'VIP') {
-      const plan = await this.planRepo.findOne({
-        where: { code: dto.planCode },
-      });
+    } else if (dto.planCode && paidCodes.includes(dto.planCode)) {
+      const code = dto.planCode === 'VIP' ? 'PREMIUM' : dto.planCode;
+      const plan = await this.planRepo.findOne({ where: { code } });
       if (!plan) throw new NotFoundException('Plano inválido');
       user.currentPlanId = plan.id;
       if (dto.planExpiresAt !== undefined) {

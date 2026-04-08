@@ -6,6 +6,8 @@ import classes from './Header.module.css';
 
 const planLabels: Record<string, string> = {
   FREE: 'Grátis',
+  DAILY: 'Diário',
+  WEEKLY: 'Semanal',
   PREMIUM: 'Premium',
   VIP: 'VIP',
 };
@@ -21,6 +23,7 @@ export function Header() {
         </Link>
         <Group gap="md">
           <Link to="/" className={classes.navLink}>Jogos do dia</Link>
+          <Link to="/planos" className={classes.navLink}>Planos</Link>
           <Link to="/premium" className={classes.navLink}>Área Premium</Link>
           {isLoggedIn ? (
             <>

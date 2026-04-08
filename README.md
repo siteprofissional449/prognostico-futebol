@@ -46,11 +46,14 @@ API em `http://localhost:3000`.
 | POST | `/football/generate-today` | Gera prognósticos do dia (rodar 1x/dia ou por cron) |
 | GET | `/users/:id/plan` | Retorna o plano do usuário |
 
-### Planos
+### Planos de membro (catálogo)
 
-- **FREE**: palpites com maior probabilidade (ex.: ≥ 65%).
-- **PREMIUM**: FREE + palpites médios (ex.: 55–65%).
-- **VIP**: todos os palpites.
+- **FREE** (R$ 0): palpites mais prováveis; navegação entre dias limitada no front.
+- **DAILY** (R$ 2,99/dia): mais palpites automáticos; ciclo diário.
+- **WEEKLY** (R$ 11,99/semana): ainda mais palpites; ciclo semanal.
+- **PREMIUM** (R$ 39,99/mês): todos os palpites automáticos + área Premium de prognósticos manuais.
+
+Na entidade `Plan` existem `paymentProvider` e `paymentPriceId` para integrar Stripe, Mercado Pago, etc.
 
 ## Gerar prognósticos todos os dias
 

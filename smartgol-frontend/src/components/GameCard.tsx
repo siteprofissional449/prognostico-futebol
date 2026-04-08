@@ -1,17 +1,20 @@
 import { Card, Text, Group, Badge } from '@mantine/core';
 import type { Prediction } from '../types';
-import type { PlanType } from '../types';
 import classes from './GameCard.module.css';
 
-const planLabels: Record<PlanType, string> = {
+const planLabels: Record<string, string> = {
   FREE: 'Grátis',
+  DAILY: 'Diário',
+  WEEKLY: 'Semanal',
   PREMIUM: 'Premium',
   VIP: 'VIP',
 };
 
-const planColors: Record<PlanType, string> = {
+const planColors: Record<string, string> = {
   FREE: 'green',
-  PREMIUM: 'blue',
+  DAILY: 'cyan',
+  WEEKLY: 'blue',
+  PREMIUM: 'violet',
   VIP: 'yellow',
 };
 
@@ -35,8 +38,8 @@ export function GameCard({ p }: { p: Prediction }) {
     <Card className={classes.card} shadow="sm" padding="lg" radius="md" withBorder>
       <Group justify="space-between" mb="xs">
         <Text size="xs" c="dimmed" tt="uppercase">{p.league}</Text>
-        <Badge size="sm" color={planColors[p.minPlan]} variant="light">
-          {planLabels[p.minPlan]}
+        <Badge size="sm" color={planColors[p.minPlan] ?? 'gray'} variant="light">
+          {planLabels[p.minPlan] ?? p.minPlan}
         </Badge>
       </Group>
       <Text fw={600} size="lg" mb="xs" className={classes.match}>

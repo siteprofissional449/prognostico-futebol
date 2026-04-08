@@ -1,17 +1,21 @@
 import { useState } from 'react';
 import { Card, Text, Group, Badge, Button, Collapse, Stack } from '@mantine/core';
 import { IconChevronDown, IconChevronUp } from '@tabler/icons-react';
-import type { AdminPrognostic, PlanType, PrognosticStatus } from '../types';
+import type { AdminPrognostic, PrognosticStatus } from '../types';
 
-const planLabels: Record<PlanType, string> = {
+const planLabels: Record<string, string> = {
   FREE: 'Grátis',
+  DAILY: 'Diário',
+  WEEKLY: 'Semanal',
   PREMIUM: 'Premium',
   VIP: 'VIP',
 };
 
-const planColors: Record<PlanType, string> = {
+const planColors: Record<string, string> = {
   FREE: 'gray',
-  PREMIUM: 'blue',
+  DAILY: 'cyan',
+  WEEKLY: 'blue',
+  PREMIUM: 'violet',
   VIP: 'yellow',
 };
 
@@ -56,8 +60,8 @@ export function PremiumPrognosticCard({ row }: { row: AdminPrognostic }) {
           </Text>
         </div>
         <Group gap="xs" wrap="nowrap">
-          <Badge variant="light" color={planColors[row.plan]} size="sm">
-            {planLabels[row.plan]}
+          <Badge variant="light" color={planColors[row.plan] ?? 'gray'} size="sm">
+            {planLabels[row.plan] ?? row.plan}
           </Badge>
           <Badge variant="light" color={st.color} size="sm">
             {st.label}

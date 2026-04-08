@@ -17,8 +17,10 @@ import type { AdminUserRow, PlanType } from '../types';
 
 const planOptions: { value: PlanType; label: string }[] = [
   { value: 'FREE', label: 'Grátis' },
-  { value: 'PREMIUM', label: 'Premium' },
-  { value: 'VIP', label: 'VIP' },
+  { value: 'DAILY', label: 'Diário (R$ 2,99/dia)' },
+  { value: 'WEEKLY', label: 'Semanal (R$ 11,99/semana)' },
+  { value: 'PREMIUM', label: 'Premium mensal (R$ 39,99/mês)' },
+  { value: 'VIP', label: 'VIP (legado → trata como Premium)' },
 ];
 
 function formatDate(iso: string | null) {
@@ -59,7 +61,8 @@ export function AdminUsers() {
   const openEdit = (u: AdminUserRow) => {
     setEditUser(u);
     const code = (u.currentPlan?.code as PlanType) || 'FREE';
-    setPlanCode(code === 'PREMIUM' || code === 'VIP' ? code : 'FREE');
+    const paid: PlanType[] = ['DAILY', 'WEEKLY', 'PREMIUM', 'VIP'];
+    setPlanCode(paid.includes(code) ? code : 'FREE');
     if (u.planExpiresAt) {
       const d = new Date(u.planExpiresAt);
       setExpiresInput(d.toISOString().slice(0, 10));
@@ -157,43 +160,59 @@ export function AdminUsers() {
             value={planCode}
             onChange={(v) => setPlanCode((v as PlanType) || 'FREE')}
           />
-          {planCode === 'PREMIUM' && (
+          {planCode !== 'FREE' && (
             <Text size="xs" c="dimmed">
-              Premium: referência de cobrança <strong>R$ 9,99 a cada 7 dias</strong>. Use a validade como fim do
-              período pago (ex.: uma semana após o pagamento).
+              Defina a <strong>validade</strong> alinhada ao ciclo: diário +1 dia, semanal +7 dias, mensal +30 dias
+              (ou use os atalhos abaixo).
             </Text>
           )}
           {planCode !== 'FREE' && (
             <>
               <TextInput
                 label="Validade (opcional)"
-                description={
-                  planCode === 'PREMIUM'
-                    ? 'Recomendado para Premium: data em que o ciclo de 7 dias termina'
-                    : 'Data final de acesso ao plano pago'
-                }
+                description="Data em que o acesso pago expira (após isso volta para Grátis)."
                 type="date"
                 value={expiresInput}
                 onChange={(e) => setExpiresInput(e.currentTarget.value)}
               />
-              {planCode === 'PREMIUM' && (
+              <Group gap="xs">
                 <Button
                   type="button"
                   variant="light"
                   size="xs"
-                  w="fit-content"
+                  onClick={() => {
+                    const d = new Date();
+                    d.setDate(d.getDate() + 1);
+                    setExpiresInput(d.toISOString().slice(0, 10));
+                  }}
+                >
+                  +1 dia
+                </Button>
+                <Button
+                  type="button"
+                  variant="light"
+                  size="xs"
                   onClick={() => {
                     const d = new Date();
                     d.setDate(d.getDate() + 7);
-                    const y = d.getFullYear();
-                    const m = String(d.getMonth() + 1).padStart(2, '0');
-                    const day = String(d.getDate()).padStart(2, '0');
-                    setExpiresInput(`${y}-${m}-${day}`);
+                    setExpiresInput(d.toISOString().slice(0, 10));
                   }}
                 >
-                  Definir validade para +7 dias (hoje)
+                  +7 dias
                 </Button>
-              )}
+                <Button
+                  type="button"
+                  variant="light"
+                  size="xs"
+                  onClick={() => {
+                    const d = new Date();
+                    d.setDate(d.getDate() + 30);
+                    setExpiresInput(d.toISOString().slice(0, 10));
+                  }}
+                >
+                  +30 dias
+                </Button>
+              </Group>
             </>
           )}
           <Group justify="flex-end" mt="md">

@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Plan } from './plan.entity';
+import { Plan, PlanBillingPeriod } from './plan.entity';
 
 @Injectable()
 export class PlansService {
@@ -11,7 +11,7 @@ export class PlansService {
   ) {}
 
   async findAll(): Promise<Plan[]> {
-    return this.planRepo.find({ order: { price: 'ASC' } });
+    return this.planRepo.find({ order: { sortOrder: 'ASC', price: 'ASC' } });
   }
 
   async findByCode(code: string): Promise<Plan | null> {
@@ -19,35 +19,69 @@ export class PlansService {
   }
 
   /**
-   * Garante os três planos no catálogo e atualiza preços/períodos (ex.: Premium 9,99/semana).
-   * Pode rodar em todo arranque da API para alinhar bases antigas.
+   * Catálogo de membros: grátis, diário, semanal, premium mensal.
+   * Preços alinhados à vitrine; paymentPriceId preenchido quando integrar gateway.
    */
   async seedPlans(): Promise<void> {
     const defaults: Array<{
       code: string;
       name: string;
+      description: string;
       price: number;
-      billingPeriod: 'WEEKLY' | 'MONTHLY';
+      billingPeriod: PlanBillingPeriod;
+      sortOrder: number;
     }> = [
-      { code: 'FREE', name: 'Grátis', price: 0, billingPeriod: 'MONTHLY' },
+      {
+        code: 'FREE',
+        name: 'Grátis',
+        description: 'Palpites básicos e navegação limitada entre dias.',
+        price: 0,
+        billingPeriod: 'NONE',
+        sortOrder: 0,
+      },
+      {
+        code: 'DAILY',
+        name: 'Membro diário',
+        description: 'Acesso ampliado aos palpites do dia; renovação diária.',
+        price: 2.99,
+        billingPeriod: 'DAILY',
+        sortOrder: 1,
+      },
+      {
+        code: 'WEEKLY',
+        name: 'Membro semanal',
+        description: 'Mais jogos e filtros; renovação a cada 7 dias.',
+        price: 11.99,
+        billingPeriod: 'WEEKLY',
+        sortOrder: 2,
+      },
       {
         code: 'PREMIUM',
-        name: 'Premium',
-        price: 9.99,
-        billingPeriod: 'WEEKLY',
+        name: 'Premium mensal',
+        description: 'Tudo que o site oferece em palpites automáticos + área premium de conteúdo.',
+        price: 39.99,
+        billingPeriod: 'MONTHLY',
+        sortOrder: 3,
       },
-      { code: 'VIP', name: 'VIP', price: 79.9, billingPeriod: 'MONTHLY' },
     ];
 
     for (const d of defaults) {
       let row = await this.planRepo.findOne({ where: { code: d.code } });
       if (row) {
         row.name = d.name;
+        row.description = d.description;
         row.price = d.price;
         row.billingPeriod = d.billingPeriod;
+        row.sortOrder = d.sortOrder;
         await this.planRepo.save(row);
       } else {
-        await this.planRepo.save(this.planRepo.create(d));
+        await this.planRepo.save(
+          this.planRepo.create({
+            ...d,
+            paymentProvider: null,
+            paymentPriceId: null,
+          }),
+        );
       }
     }
   }

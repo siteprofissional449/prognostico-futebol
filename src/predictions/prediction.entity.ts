@@ -1,9 +1,11 @@
 import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
 
+/** Nível mínimo para ver um palpite automático (hierarquia crescente). */
 export enum PlanType {
   FREE = 'FREE',
+  DAILY = 'DAILY',
+  WEEKLY = 'WEEKLY',
   PREMIUM = 'PREMIUM',
-  VIP = 'VIP',
 }
 
 @Entity('predictions')

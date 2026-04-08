@@ -43,9 +43,26 @@ function addDaysLocal(base: Date, delta: number): Date {
   return d;
 }
 
+function isPaidMember(plan: string | null): boolean {
+  return (
+    plan === 'DAILY' ||
+    plan === 'WEEKLY' ||
+    plan === 'PREMIUM' ||
+    plan === 'VIP'
+  );
+}
+
+function planDisplayName(plan: string | null): string {
+  if (plan === 'DAILY') return 'Diário';
+  if (plan === 'WEEKLY') return 'Semanal';
+  if (plan === 'PREMIUM') return 'Premium mensal';
+  if (plan === 'VIP') return 'VIP';
+  return plan ?? '—';
+}
+
 export function Premium() {
   const { isLoggedIn, plan } = useAuth();
-  const isSubscriber = isLoggedIn && (plan === 'PREMIUM' || plan === 'VIP');
+  const isSubscriber = isLoggedIn && isPaidMember(plan);
 
   const [plans, setPlans] = useState<Plan[]>([]);
   const [list, setList] = useState<AdminPrognostic[]>([]);
@@ -93,7 +110,7 @@ export function Premium() {
     return { p, w, l, total: list.length };
   }, [list]);
 
-  const paidPlans = plans.filter((pl) => pl.code === 'PREMIUM' || pl.code === 'VIP');
+  const paidPlans = plans.filter((pl) => pl.code !== 'FREE' && Number(pl.price) > 0);
 
   return (
     <Container size="lg" py="xl">
@@ -106,13 +123,17 @@ export function Premium() {
             <Title order={1}>Área Premium</Title>
           </Group>
           <Text c="dimmed" maw={560}>
-            Conteúdo curado: palpites com odd, análise e acompanhamento de resultado — alinhado ao seu plano
-            (Premium ou VIP).
+            Conteúdo curado: palpites com odd, análise e acompanhamento de resultado — para assinantes Diário,
+            Semanal ou Premium mensal.
           </Text>
         </div>
         {isSubscriber && plan && (
-          <Badge size="lg" variant="light" color={plan === 'VIP' ? 'yellow' : 'blue'}>
-            Plano ativo: {plan === 'VIP' ? 'VIP' : 'Premium'}
+          <Badge
+            size="lg"
+            variant="light"
+            color={plan === 'VIP' ? 'yellow' : plan === 'PREMIUM' ? 'violet' : 'blue'}
+          >
+            Plano ativo: {planDisplayName(plan)}
           </Badge>
         )}
       </Group>
@@ -128,7 +149,7 @@ export function Premium() {
                 Acesso para assinantes
               </Title>
               <Text c="dimmed" size="sm" mb="md">
-                Entre com sua conta Premium ou VIP para ver os prognósticos exclusivos cadastrados pela equipe.
+                Entre com uma conta assinante (Diário, Semanal ou Premium) para ver os prognósticos exclusivos.
               </Text>
               <Group gap="sm">
                 <Button component={Link} to="/login" state={{ from: '/premium' }}>
@@ -161,20 +182,20 @@ export function Premium() {
                 <Text size="xl" fw={800} c="green.4" mb="md">
                   R$ {Number(pl.price).toFixed(2)}
                   <Text span size="sm" c="dimmed" fw={400}>
-                    {pl.billingPeriod === 'WEEKLY'
-                      ? ' / semana (renova a cada 7 dias)'
-                      : ' / mês'}
+                    {pl.billingPeriod === 'DAILY'
+                      ? ' / dia'
+                      : pl.billingPeriod === 'WEEKLY'
+                        ? ' / semana'
+                        : pl.billingPeriod === 'MONTHLY'
+                          ? ' / mês'
+                          : ''}
                   </Text>
                 </Text>
-                {pl.billingPeriod === 'WEEKLY' && pl.code === 'PREMIUM' && (
-                  <Text size="xs" c="dimmed" mb="sm">
-                    Cada ciclo cobre 7 dias de acesso Premium; ao vencer a data no sistema, é preciso renovar
-                    (pagamento ou liberação pelo admin).
-                  </Text>
-                )}
+                <Button component={Link} to="/planos" variant="light" size="xs" mb="sm">
+                  Ver todos os planos e integração de pagamento
+                </Button>
                 <Text size="xs" c="dimmed">
-                  Contratação e pagamento podem ser configurados com o administrador (área admin: gestão de
-                  planos do usuário).
+                  Contratação: checkout (quando configurado) ou liberação pelo admin em Usuários.
                 </Text>
               </Paper>
             ))}
@@ -202,7 +223,7 @@ export function Premium() {
             <List.Item>Palpites selecionados com odd e texto de análise</List.Item>
             <List.Item>Filtro por intervalo de datas dos jogos</List.Item>
             <List.Item>Indicadores de resultado (pendente / green / red)</List.Item>
-            <List.Item>VIP inclui entradas marcadas só para VIP no painel admin</List.Item>
+            <List.Item>Conteúdo mais restrito aparece conforme o plano mínimo definido no admin</List.Item>
           </List>
         </Paper>
         <Paper p="lg" radius="md" withBorder>
@@ -215,7 +236,7 @@ export function Premium() {
           {isSubscriber ? (
             <Text size="sm" c="dimmed">
               Os prognósticos listados abaixo são os cadastrados em <strong>Admin → Prognósticos</strong>, filtrados
-              automaticamente pelo seu plano. Premium não vê itens exclusivos de VIP.
+              pelo nível do seu plano (Diário, Semanal ou Premium).
             </Text>
           ) : (
             <Text size="sm" c="dimmed">

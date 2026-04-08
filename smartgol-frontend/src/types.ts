@@ -1,4 +1,4 @@
-export type PlanType = 'FREE' | 'PREMIUM' | 'VIP';
+export type PlanType = 'FREE' | 'DAILY' | 'WEEKLY' | 'PREMIUM' | 'VIP';
 
 export interface Prediction {
   id: string;
@@ -14,15 +14,19 @@ export interface Prediction {
   predictionDate: string;
 }
 
-export type BillingPeriod = 'WEEKLY' | 'MONTHLY';
+export type BillingPeriod = 'NONE' | 'DAILY' | 'WEEKLY' | 'MONTHLY';
 
 export interface Plan {
   id: string;
   code: string;
   name: string;
+  description?: string | null;
   /** Valor por período de cobrança */
   price: number;
   billingPeriod: BillingPeriod;
+  sortOrder?: number;
+  paymentProvider?: string | null;
+  paymentPriceId?: string | null;
 }
 
 export interface LoginResponse {

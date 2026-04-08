@@ -8,8 +8,9 @@ export enum PrognosticStatus {
 
 export enum PrognosticPlan {
   FREE = 'FREE',
+  DAILY = 'DAILY',
+  WEEKLY = 'WEEKLY',
   PREMIUM = 'PREMIUM',
-  VIP = 'VIP',
 }
 
 @Entity('prognostics')

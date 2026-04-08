@@ -501,7 +501,8 @@ export class FootballService {
 
   private probabilityToPlan(probability: number): PlanType {
     if (probability >= 0.65) return PlanType.FREE;
-    if (probability >= 0.55) return PlanType.PREMIUM;
-    return PlanType.VIP;
+    if (probability >= 0.58) return PlanType.DAILY;
+    if (probability >= 0.52) return PlanType.WEEKLY;
+    return PlanType.PREMIUM;
   }
 }

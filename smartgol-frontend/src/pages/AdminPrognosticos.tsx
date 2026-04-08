@@ -34,8 +34,10 @@ const statusOptions: { value: PrognosticStatus; label: string }[] = [
 
 const planOptions: { value: PlanType; label: string }[] = [
   { value: 'FREE', label: 'Grátis' },
-  { value: 'PREMIUM', label: 'Premium' },
-  { value: 'VIP', label: 'VIP' },
+  { value: 'DAILY', label: 'Diário' },
+  { value: 'WEEKLY', label: 'Semanal' },
+  { value: 'PREMIUM', label: 'Premium mensal' },
+  { value: 'VIP', label: 'VIP (legado)' },
 ];
 
 function statusColor(s: PrognosticStatus) {

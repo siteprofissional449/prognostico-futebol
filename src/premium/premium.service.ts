@@ -8,9 +8,17 @@ import {
 
 const PLAN_ORDER: Record<PrognosticPlan, number> = {
   [PrognosticPlan.FREE]: 0,
-  [PrognosticPlan.PREMIUM]: 1,
-  [PrognosticPlan.VIP]: 2,
+  [PrognosticPlan.DAILY]: 1,
+  [PrognosticPlan.WEEKLY]: 2,
+  [PrognosticPlan.PREMIUM]: 3,
 };
+
+/** VIP legado no banco = mesmo nível que PREMIUM */
+function prognosticRequiredTier(plan: string): number {
+  if (plan === 'VIP') return PLAN_ORDER[PrognosticPlan.PREMIUM];
+  const p = plan as PrognosticPlan;
+  return PLAN_ORDER[p] ?? 0;
+}
 
 function localDateKey(d: Date): string {
   const y = d.getFullYear();
@@ -40,7 +48,7 @@ export class PremiumService {
       order: { matchDate: 'DESC', createdAt: 'DESC' },
     });
     list = list.filter((row) => {
-      const required = PLAN_ORDER[row.plan as PrognosticPlan] ?? 0;
+      const required = prognosticRequiredTier(String(row.plan));
       return required <= tier;
     });
     if (from) {
@@ -57,8 +65,10 @@ export class PremiumService {
   }
 
   private planToTier(plan: string): number {
-    if (plan === 'VIP') return PLAN_ORDER[PrognosticPlan.VIP];
+    if (plan === 'VIP') return PLAN_ORDER[PrognosticPlan.PREMIUM];
     if (plan === 'PREMIUM') return PLAN_ORDER[PrognosticPlan.PREMIUM];
+    if (plan === 'WEEKLY') return PLAN_ORDER[PrognosticPlan.WEEKLY];
+    if (plan === 'DAILY') return PLAN_ORDER[PrognosticPlan.DAILY];
     return PLAN_ORDER[PrognosticPlan.FREE];
   }
 }

@@ -12,6 +12,7 @@ import { AdminDashboard } from './pages/AdminDashboard';
 import { AdminUsers } from './pages/AdminUsers';
 import { AdminPrognosticos } from './pages/AdminPrognosticos';
 import { Premium } from './pages/Premium';
+import { Planos } from './pages/Planos';
 import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
 import './index.css';
@@ -32,6 +33,7 @@ function App() {
               <Route path="login" element={<Login />} />
               <Route path="register" element={<Register />} />
               <Route path="premium" element={<Premium />} />
+              <Route path="planos" element={<Planos />} />
               <Route path="admin" element={<AdminRouteGuard />}>
                 <Route element={<AdminShell />}>
                   <Route index element={<AdminDashboard />} />

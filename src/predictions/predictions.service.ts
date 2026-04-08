@@ -5,9 +5,23 @@ import { Prediction, PlanType } from './prediction.entity';
 
 const PLAN_ORDER: Record<PlanType, number> = {
   [PlanType.FREE]: 0,
-  [PlanType.PREMIUM]: 1,
-  [PlanType.VIP]: 2,
+  [PlanType.DAILY]: 1,
+  [PlanType.WEEKLY]: 2,
+  [PlanType.PREMIUM]: 3,
 };
+
+function userAccessTier(plan: string): number {
+  if (plan === 'VIP') return PLAN_ORDER[PlanType.PREMIUM];
+  const t = plan as PlanType;
+  return t in PLAN_ORDER ? PLAN_ORDER[t] : PLAN_ORDER[PlanType.FREE];
+}
+
+/** Palpite exige este nível mínimo (aceita VIP legado = PREMIUM). */
+function predictionMinTier(minPlan: string): number {
+  if (minPlan === 'VIP') return PLAN_ORDER[PlanType.PREMIUM];
+  const t = minPlan as PlanType;
+  return t in PLAN_ORDER ? PLAN_ORDER[t] : PLAN_ORDER[PlanType.PREMIUM];
+}
 
 @Injectable()
 export class PredictionsService {
@@ -16,16 +30,14 @@ export class PredictionsService {
     private readonly predictionRepo: Repository<Prediction>,
   ) {}
 
-  async findByPlan(plan: PlanType, date?: string): Promise<Prediction[]> {
+  async findByPlan(plan: PlanType | string, date?: string): Promise<Prediction[]> {
     const targetDate = date || this.today();
-    const minLevel = PLAN_ORDER[plan];
+    const userLevel = userAccessTier(String(plan));
     const list = await this.predictionRepo.find({
       where: { predictionDate: targetDate },
       order: { probability: 'DESC', createdAt: 'ASC' },
     });
-    return list.filter(
-      (p) => PLAN_ORDER[p.minPlan as PlanType] <= minLevel,
-    );
+    return list.filter((p) => predictionMinTier(String(p.minPlan)) <= userLevel);
   }
 
   async saveMany(predictions: Partial<Prediction>[]): Promise<Prediction[]> {

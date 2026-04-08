@@ -43,7 +43,7 @@ function isToday(dateStr: string): boolean {
 
 /** Plano grátis: só pode buscar dia anterior e dia seguinte (não passa disso) */
 function isFreePlan(plan: PlanType | null, isLoggedIn: boolean): boolean {
-  return !isLoggedIn || plan === 'FREE';
+  return !isLoggedIn || plan === 'FREE' || plan === null;
 }
 
 export function Home() {
