@@ -7,5 +7,8 @@ buildCommand = "npm install && npm run build"
 
 [deploy]
 startCommand = "npm run start:prod"
+# Evita tráfego antes da app estar de pé; alinhar com GET /health no AppController
+healthcheckPath = "/health"
+healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
