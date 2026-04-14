@@ -25,10 +25,10 @@ async function bootstrap() {
   await app.get(PlansService).seedPlans();
   await app.get(UsersService).promoteEnvAdmin();
 
+  // Railway define PORT; em local usa 8080 se não houver variável.
   const port = Number(process.env.PORT) || 8080;
-  // Railway/proxy público: sem '0.0.0.0' o bind pode ficar só em localhost e o URL público dá 502/erro.
   await app.listen(port, '0.0.0.0');
-  console.log(`API a escutar em 0.0.0.0:${port}`);
+  console.log(`API rodando em http://0.0.0.0:${port}`);
 }
 bootstrap().catch((err) => {
   console.error('Falha ao iniciar a API:', err);
