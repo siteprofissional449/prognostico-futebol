@@ -81,6 +81,7 @@ function typeOrmOptions(): TypeOrmModuleOptions {
     PremiumModule,
     PaymentsModule,
   ],
+  /** Rotas na raiz: AppController (GET /, GET /health). */
   controllers: [AppController],
 })
 export class AppModule {}

@@ -16,7 +16,10 @@ function corsOrigin(): true | string | string[] {
 }
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    // Garante nos logs do deploy (ex.: Railway) as linhas "Mapped {/, GET} route" e "/health".
+    logger: ['error', 'warn', 'log'],
+  });
   app.enableCors({
     origin: corsOrigin(),
     methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
