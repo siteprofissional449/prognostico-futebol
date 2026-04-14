@@ -28,11 +28,11 @@ async function bootstrap() {
   await app.get(PlansService).seedPlans();
   await app.get(UsersService).promoteEnvAdmin();
 
-  // Railway injeta PORT; ?? '8080' evita undefined em local (Express aceita string).
-  await app.listen(process.env.PORT ?? '8080', '0.0.0.0');
-  console.log(
-    `API rodando em http://0.0.0.0:${process.env.PORT ?? '8080'}`,
-  );
+  const listenPort = process.env.PORT ?? '8080';
+  // Log explícito: na Railway o "Target port" do domínio público tem de coincidir com este valor.
+  console.log(`[bootstrap] PORT=${process.env.PORT ?? '(não definido → 8080)'} → listen 0.0.0.0:${listenPort}`);
+  await app.listen(listenPort, '0.0.0.0');
+  console.log(`API rodando em http://0.0.0.0:${listenPort}`);
 }
 bootstrap().catch((err) => {
   console.error('Falha ao iniciar a API:', err);
