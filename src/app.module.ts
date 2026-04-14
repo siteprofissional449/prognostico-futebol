@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule, TypeOrmModuleOptions } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
-import { RootHttpModule } from './root-http.module';
+import { AppController } from './app.controller';
 import { UsersModule } from './users/users.module';
 import { PlansModule } from './plans/plans.module';
 import { PredictionsModule } from './predictions/predictions.module';
@@ -68,7 +68,6 @@ function typeOrmOptions(): TypeOrmModuleOptions {
 
 @Module({
   imports: [
-    RootHttpModule,
     ConfigModule.forRoot({ isGlobal: true }),
     ScheduleModule.forRoot(),
     TypeOrmModule.forRoot(typeOrmOptions()),
@@ -82,5 +81,6 @@ function typeOrmOptions(): TypeOrmModuleOptions {
     PremiumModule,
     PaymentsModule,
   ],
+  controllers: [AppController],
 })
 export class AppModule {}

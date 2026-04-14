@@ -16,6 +16,9 @@ function corsOrigin(): true | string | string[] {
 }
 
 async function bootstrap() {
+  console.log(
+    `[bootstrap] railway_sha=${process.env.RAILWAY_GIT_COMMIT_SHA ?? 'n/a'} branch=${process.env.RAILWAY_GIT_BRANCH ?? 'n/a'}`,
+  );
   const app = await NestFactory.create(AppModule, {
     // Garante nos logs do deploy (ex.: Railway) as linhas "Mapped {/, GET} route" e "/health".
     logger: ['error', 'warn', 'log'],
