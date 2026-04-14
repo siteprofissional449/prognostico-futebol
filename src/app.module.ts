@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule, TypeOrmModuleOptions } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
+import { AppController } from './app.controller';
 import { UsersModule } from './users/users.module';
 import { PlansModule } from './plans/plans.module';
 import { PredictionsModule } from './predictions/predictions.module';
@@ -17,18 +19,34 @@ function envFlag(name: string): boolean {
   return v === 'true' || v === '1' || v === 'yes' || v === 'on';
 }
 
+function sslForPostgresUrl(databaseUrl: string | undefined) {
+  if (envFlag('DB_SSL')) {
+    return { rejectUnauthorized: false as const };
+  }
+  if (!databaseUrl) return undefined;
+  try {
+    const host = new URL(databaseUrl.replace(/^postgresql:/, 'postgres:'))
+      .hostname;
+    if (/\.rlwy\.net|railway\.app|render\.com|neon\.tech/i.test(host)) {
+      return { rejectUnauthorized: false as const };
+    }
+  } catch {
+    /* ignore */
+  }
+  return undefined;
+}
+
 function typeOrmOptions(): TypeOrmModuleOptions {
   const synchronize =
     envFlag('DB_SYNC') || process.env.NODE_ENV !== 'production';
 
-  const ssl = envFlag('DB_SSL')
-    ? { rejectUnauthorized: false as const }
-    : undefined;
+  const dbUrl = process.env.DATABASE_URL?.trim();
+  const ssl = sslForPostgresUrl(dbUrl);
 
-  if (process.env.DATABASE_URL?.trim()) {
+  if (dbUrl) {
     return {
       type: 'postgres',
-      url: process.env.DATABASE_URL.trim(),
+      url: dbUrl,
       autoLoadEntities: true,
       synchronize,
       ...(ssl ? { ssl } : {}),
@@ -51,6 +69,7 @@ function typeOrmOptions(): TypeOrmModuleOptions {
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ScheduleModule.forRoot(),
     TypeOrmModule.forRoot(typeOrmOptions()),
     UsersModule,
     PlansModule,
@@ -62,5 +81,6 @@ function typeOrmOptions(): TypeOrmModuleOptions {
     PremiumModule,
     PaymentsModule,
   ],
+  controllers: [AppController],
 })
 export class AppModule {}
