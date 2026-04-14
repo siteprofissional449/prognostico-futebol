@@ -1,8 +1,8 @@
 # Configuração para https://railway.app — raiz do repo = API Nest (não use smartgol-frontend aqui).
-# Build/start também podem ser ajustados no painel do Railway.
+# Railpack substitui Nixpacks (deprecado). Docs: https://docs.railway.com
 
 [build]
-builder = "nixpacks"
+builder = "RAILPACK"
 buildCommand = "npm install && npm run build"
 
 [deploy]
