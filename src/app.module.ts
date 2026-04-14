@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule, TypeOrmModuleOptions } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
-import { AppController } from './app.controller';
+import { RootHttpModule } from './root-http.module';
 import { UsersModule } from './users/users.module';
 import { PlansModule } from './plans/plans.module';
 import { PredictionsModule } from './predictions/predictions.module';
@@ -68,6 +68,7 @@ function typeOrmOptions(): TypeOrmModuleOptions {
 
 @Module({
   imports: [
+    RootHttpModule,
     ConfigModule.forRoot({ isGlobal: true }),
     ScheduleModule.forRoot(),
     TypeOrmModule.forRoot(typeOrmOptions()),
@@ -81,7 +82,5 @@ function typeOrmOptions(): TypeOrmModuleOptions {
     PremiumModule,
     PaymentsModule,
   ],
-  /** Rotas na raiz: AppController (GET /, GET /health). */
-  controllers: [AppController],
 })
 export class AppModule {}
