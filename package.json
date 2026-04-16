@@ -1,13 +1,18 @@
 {
   "name": "prognostico-futebol-backend",
   "version": "1.0.0",
-  "description": "API de prognósticos de futebol - Free, Premium e VIP",
+  "description": "API de prognósticos de futebol - planos grátis e pagos (Diário, Semanal, Premium)",
   "scripts": {
     "build": "nest build",
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
-    "start:prod": "node dist/main"
+    "start:prod": "node dist/main",
+    "bootstrap:admin": "node dist/bootstrap-admin.js",
+    "db:railway-sync": "node scripts/run-railway-schema-sync.js",
+    "db:railway-init": "node scripts/run-railway-schema-sync.js railway-init-full.sql",
+    "db:railway-verify": "node scripts/run-railway-verify.js",
+    "sqltools:railway-env": "node scripts/sqltools-railway-env.js"
   },
   "dependencies": {
     "@nestjs/common": "^10.0.0",
@@ -16,6 +21,7 @@
     "@nestjs/jwt": "^10.0.0",
     "@nestjs/passport": "^10.0.0",
     "@nestjs/platform-express": "^10.0.0",
+    "@nestjs/schedule": "^6.1.1",
     "@nestjs/typeorm": "^10.0.0",
     "axios": "^1.6.0",
     "bcrypt": "^5.1.1",
