@@ -3,7 +3,8 @@
 
 [build]
 builder = "NIXPACKS"
-buildCommand = "npm install && npm run build"
+# Com NODE_ENV=production o npm omite devDependencies; @nestjs/cli é necessário para compilar.
+buildCommand = "npm install --include=dev && npm run build"
 
 [deploy]
 startCommand = "npm run start:prod"
