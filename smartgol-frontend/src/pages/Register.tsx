@@ -9,10 +9,18 @@ export function Register() {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (password !== confirmPassword) {
+      notifications.show({
+        color: 'yellow',
+        message: 'As senhas não conferem.',
+      });
+      return;
+    }
     setLoading(true);
     try {
       await register(email, password);
@@ -48,6 +56,18 @@ export function Register() {
               onChange={(e) => setPassword(e.target.value)}
               required
               placeholder="••••••••"
+            />
+            <PasswordInput
+              label="Confirmar senha"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+              placeholder="••••••••"
+              error={
+                confirmPassword.length > 0 && password !== confirmPassword
+                  ? 'As senhas não conferem'
+                  : undefined
+              }
             />
             <Button type="submit" loading={loading} fullWidth>Criar conta</Button>
           </Stack>
