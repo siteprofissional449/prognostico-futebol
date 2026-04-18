@@ -25,7 +25,7 @@ export class PaymentsController {
     const planCode = body?.planCode?.trim()?.toUpperCase();
     if (!planCode) {
       throw new BadRequestException(
-        'Informe planCode: DAILY, WEEKLY ou PREMIUM.',
+        'Informe planCode: DAILY, WEEKLY ou MONTHLY.',
       );
     }
     return this.mercadoPago.createPreference(

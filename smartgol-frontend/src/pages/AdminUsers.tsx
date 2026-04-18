@@ -59,10 +59,9 @@ export function AdminUsers() {
 
   const openEdit = (u: AdminUserRow) => {
     setEditUser(u);
-    const raw = (u.currentPlan?.code as string) || 'FREE';
-    const code = (raw === 'VIP' ? 'PREMIUM' : raw) as PlanType;
+    const raw = ((u.currentPlan?.code as string) || 'FREE') as PlanType;
     const paid: PlanType[] = ['DAILY', 'WEEKLY', 'PREMIUM'];
-    setPlanCode(paid.includes(code) ? code : 'FREE');
+    setPlanCode(paid.includes(raw) ? raw : 'FREE');
     if (u.planExpiresAt) {
       const d = new Date(u.planExpiresAt);
       setExpiresInput(d.toISOString().slice(0, 10));

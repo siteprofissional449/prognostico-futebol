@@ -1,7 +1,16 @@
 .header {
-  padding: 0.75rem 1.5rem;
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  padding: 0.65rem 1rem;
   background: var(--mantine-color-dark-7);
   border-bottom: 1px solid var(--mantine-color-dark-4);
+  backdrop-filter: blur(6px);
+}
+
+.inner {
+  margin: 0 auto;
+  max-width: 1200px;
 }
 
 .logo {
@@ -13,8 +22,41 @@
   color: var(--mantine-color-gray-3);
   text-decoration: none;
   font-size: 0.9rem;
+  font-weight: 600;
+  padding: 0.2rem 0.1rem;
 }
 
 .navLink:hover {
   color: var(--mantine-color-green-4);
+  text-decoration: none;
+}
+
+.planBadge {
+  padding: 0.28rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--mantine-color-dark-4);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.drawerBody {
+  padding-top: 0.25rem;
+}
+
+.mobileLink {
+  color: var(--mantine-color-gray-2);
+  text-decoration: none;
+  font-weight: 600;
+  padding: 0.35rem 0;
+}
+
+.mobileLink:hover {
+  color: var(--mantine-color-green-4);
+  text-decoration: none;
+}
+
+@media (max-width: 47.99em) {
+  .desktopLinks,
+  .desktopActions {
+    display: none;
+  }
 }

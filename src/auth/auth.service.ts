@@ -30,14 +30,22 @@ export class AuthService {
 
   async login(email: string, password: string) {
     const user = await this.validateUser(email, password);
-    const plan = await this.usersService.getUserPlanType(user.id);
+    const access = await this.usersService.getUserAccessContext(user.id);
     const payload = {
       sub: user.id,
       email: user.email,
-      plan,
+      plan: access.plan,
+      userAccessTier: access.userAccessTier,
+      expiresAt: access.expiresAt,
       isAdmin: !!user.isAdmin,
     };
     const access_token = await this.jwtService.signAsync(payload);
-    return { access_token, plan, isAdmin: !!user.isAdmin };
+    return {
+      access_token,
+      plan: access.plan,
+      userAccessTier: access.userAccessTier,
+      expiresAt: access.expiresAt,
+      isAdmin: !!user.isAdmin,
+    };
   }
 }

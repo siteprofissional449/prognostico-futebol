@@ -1,18 +1,65 @@
-export type PlanType = 'FREE' | 'DAILY' | 'WEEKLY' | 'PREMIUM';
+export type PlanType = 'FREE' | 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'PREMIUM';
 
-export interface Prediction {
+/** Resposta de GET /football/generation-info */
+export interface GenerationInfo {
+  lastAt: string | null;
+  lastCount: number | null;
+  scheduleDescription: string;
+  timezone: string;
+}
+
+/** Palpite com regras de exibição free / premium (API v2). */
+export interface PredictionView {
   id: string;
   matchId: string;
   homeTeam: string;
   awayTeam: string;
   league: string;
   startTime: string;
-  market: string;
-  probability: number;
-  odd: number;
-  minPlan: PlanType;
   predictionDate: string;
+  minPlan: PlanType;
+  market: string | null;
+  probability: number | null;
+  odd: number | null;
+  probHome?: number | null;
+  probDraw?: number | null;
+  probAway?: number | null;
+  bestBet?: string | null;
+  analysis?: string | null;
+  confidence?: number | null;
+  isPremium: boolean;
+  locked: boolean;
+  finalScore?: string | null;
+  resultStatus?: 'GREEN' | 'RED' | 'PENDING' | null;
 }
+
+export interface PredictionsListResponse {
+  items: PredictionView[];
+  meta: {
+    total: number;
+    freeSlotCount: number;
+    homeTeaserCount: number;
+    requestedDate: string;
+    effectiveDate: string;
+    userAccessTier: number;
+    plan: PlanType;
+    canAccessHistory: boolean;
+    canAccessPastResults: boolean;
+  };
+}
+
+export interface PredictionsHistoryResponse {
+  days: Array<{ date: string; items: PredictionView[] }>;
+  meta: {
+    from: string;
+    to: string;
+    userAccessTier: number;
+    plan: PlanType;
+  };
+}
+
+/** @deprecated Use PredictionView */
+export type Prediction = PredictionView;
 
 export type BillingPeriod = 'NONE' | 'DAILY' | 'WEEKLY' | 'MONTHLY';
 
@@ -32,6 +79,8 @@ export interface Plan {
 export interface LoginResponse {
   access_token: string;
   plan: PlanType;
+  userAccessTier: number;
+  expiresAt: string | null;
   isAdmin: boolean;
 }
 

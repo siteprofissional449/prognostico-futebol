@@ -1,6 +1,6 @@
 # Prognóstico Futebol - Backend
 
-API de prognósticos de futebol com áreas **Grátis**, **Premium** e **VIP**. Geração diária de palpites com base em probabilidade (odds).
+API de prognósticos de futebol com área **grátis** e **assinatura** (Diário, Semanal, Premium mensal). Geração diária de palpites com base em probabilidade (odds).
 
 ## Requisitos
 
@@ -40,7 +40,7 @@ API em `http://localhost:3000`.
 |--------|------|-----------|
 | POST | `/auth/register` | Cadastro (body: `email`, `password`) |
 | POST | `/auth/login` | Login (body: `email`, `password`) → retorna `access_token` e `plan` |
-| GET | `/plans` | Lista planos (FREE, PREMIUM, VIP) |
+| GET | `/plans` | Lista planos (FREE, DAILY, WEEKLY, PREMIUM) |
 | GET | `/predictions/public?plan=FREE&date=...` | Prognósticos do dia (público) |
 | GET | `/predictions` | Prognósticos do dia (requer `Authorization: Bearer TOKEN`) |
 | POST | `/football/generate-today` | Gera prognósticos do dia (rodar 1x/dia ou por cron) |
@@ -145,9 +145,7 @@ Pode desativar ou apagar o serviço no Render quando a API na Railway estiver es
    Acesse `http://localhost:3001`.
 
 4. **Testar no navegador**
-   - **Início**: abra a home e clique em "Ver palpites do dia".
-   - **Palpites (sem login)**: em `/palpites` você vê a lista; troque FREE/PREMIUM/VIP para ver diferença.
-   - **Cadastro**: `/cadastro` → e-mail e senha → cadastrar.
-   - **Login**: `/login` → entrar com o mesmo e-mail/senha.
-   - **Palpites (logado)**: em `/palpites` a lista usa o plano da sua conta (inicialmente FREE).
-   - **Planos**: `/planos` mostra os três planos e preços.
+   - **Início**: palpites do dia; visitante vê nível FREE, logado conforme o plano da conta.
+   - **Cadastro** / **Login**: `/register` e `/login`.
+   - **Área Premium**: `/premium` para assinantes (Diário, Semanal ou Premium mensal).
+   - **Planos**: `/planos` mostra o catálogo e preços.

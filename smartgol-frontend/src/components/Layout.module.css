@@ -1,0 +1,11 @@
+.main {
+  padding: 0.5rem 0 1.2rem;
+}
+
+@media (max-width: 47.99em) {
+  .main {
+    padding-top: 0.35rem;
+    /* Espaço para a barra inferior + safe area (iPhone) */
+    padding-bottom: calc(4.25rem + env(safe-area-inset-bottom, 0px));
+  }
+}

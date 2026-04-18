@@ -6,6 +6,8 @@ export interface JwtPayload {
   sub: string;
   email: string;
   plan: string;
+  userAccessTier?: number;
+  expiresAt?: string | null;
   isAdmin?: boolean;
 }
 
@@ -24,6 +26,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       userId: payload.sub,
       email: payload.email,
       plan: payload.plan,
+      userAccessTier: payload.userAccessTier ?? 0,
+      expiresAt: payload.expiresAt ?? null,
       isAdmin: !!payload.isAdmin,
     };
   }

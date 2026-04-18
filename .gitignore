@@ -9,6 +9,9 @@ build/
 .env.*
 !.env.example
 
+# Gerado por sqltools-railway-env (pode conter password)
+railway-pg.ps1
+
 # Logs e SO
 *.log
 .DS_Store

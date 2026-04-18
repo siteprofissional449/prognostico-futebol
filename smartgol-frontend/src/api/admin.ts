@@ -18,3 +18,9 @@ export function patchAdminUser(
     body: JSON.stringify(body),
   });
 }
+
+/** Gera prognósticos (IA + API futebol). Requer JWT de administrador. */
+export function adminGeneratePredictions(date?: string) {
+  const q = date?.trim() ? `?date=${encodeURIComponent(date.trim())}` : '';
+  return api<{ count: number }>(`/predictions/generate-today${q}`);
+}

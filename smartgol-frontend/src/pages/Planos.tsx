@@ -36,6 +36,19 @@ function billingLabel(p: Plan): string {
   }
 }
 
+function periodLabel(period: Plan['billingPeriod']): string {
+  switch (period) {
+    case 'DAILY':
+      return 'Diário';
+    case 'WEEKLY':
+      return 'Semanal';
+    case 'MONTHLY':
+      return 'Mensal';
+    default:
+      return 'Sem renovação';
+  }
+}
+
 export function Planos() {
   const { isLoggedIn } = useAuth();
   const [searchParams] = useSearchParams();
@@ -53,12 +66,10 @@ export function Planos() {
       <Stack gap="lg" mb="xl">
         <div>
           <Title order={1} mb="xs">
-            Planos de membros
+            Escolha seu plano
           </Title>
           <Text c="dimmed" maw={640}>
-            Assinatura via <strong>Mercado Pago</strong> (checkout seguro). Configure na API:{' '}
-            <code>MERCADOPAGO_ACCESS_TOKEN</code>, <code>API_PUBLIC_URL</code> (webhook) e{' '}
-            <code>FRONTEND_URL</code> (retorno após pagar).
+            Assine em poucos cliques com checkout seguro e liberação automática do acesso.
           </Text>
         </div>
 
@@ -79,18 +90,17 @@ export function Planos() {
           </Alert>
         )}
 
-        <Alert variant="light" color="blue" title="Mercado Pago" icon={<IconCreditCard size={18} />}>
-          Em produção, use URL <strong>HTTPS</strong> em <code>API_PUBLIC_URL</code> para o webhook funcionar.
-          No painel do Mercado Pago você pode apontar a mesma URL de notificação.
+        <Alert variant="light" color="blue" title="Pagamento seguro" icon={<IconCreditCard size={18} />}>
+          O pagamento é processado pelo Mercado Pago.
         </Alert>
       </Stack>
 
       <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
         {plans.map((pl) => {
           const isFree = pl.code === 'FREE' || Number(pl.price) === 0;
-          const paidCode = pl.code as 'DAILY' | 'WEEKLY' | 'PREMIUM';
+          const paidCode = pl.code as 'DAILY' | 'WEEKLY' | 'MONTHLY';
           const canMp =
-            !isFree && ['DAILY', 'WEEKLY', 'PREMIUM'].includes(pl.code);
+            !isFree && ['DAILY', 'WEEKLY', 'MONTHLY'].includes(pl.code);
 
           return (
             <Paper key={pl.id} p="lg" radius="md" withBorder shadow="sm">
@@ -99,7 +109,7 @@ export function Planos() {
                   {pl.name}
                 </Text>
                 <Badge variant="light" color={isFree ? 'gray' : 'green'}>
-                  {pl.code}
+                  {isFree ? 'Grátis' : 'Pago'}
                 </Badge>
               </Group>
               {pl.description && (
@@ -126,15 +136,8 @@ export function Planos() {
                 }
               >
                 <List.Item>
-                  Ciclo: <strong>{pl.billingPeriod}</strong>
+                  Ciclo: <strong>{periodLabel(pl.billingPeriod)}</strong>
                 </List.Item>
-                {!isFree && pl.paymentPriceId && (
-                  <List.Item>
-                    <Text size="xs" c="dimmed">
-                      Opcional: <code>paymentPriceId</code> — checkout usa o preço do plano na API.
-                    </Text>
-                  </List.Item>
-                )}
               </List>
               {isFree ? (
                 <Button component={Link} to="/register" variant="light" fullWidth>

@@ -1,19 +1,22 @@
-import { Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { Controller, Get, Param, Query } from '@nestjs/common';
 import { FootballService } from './football.service';
 
 @Controller('football')
 export class FootballController {
   constructor(private readonly footballService: FootballService) {}
 
-  @Post('generate-today')
-  async generateToday(@Query('date') date?: string) {
-    return this.footballService.generateDailyPredictions(date);
+  /** Última geração de prognósticos + texto do agendamento automático (público). */
+  @Get('generation-info')
+  async generationInfo() {
+    return this.footballService.getGenerationInfo();
   }
 
   /** Resultados do dia (partidas finalizadas) */
   @Get('results')
   async results(@Query('date') date?: string) {
-    return this.footballService.getResultsOfDay(date);
+    const today = new Date().toISOString().slice(0, 10);
+    const effectiveDate = date && date === today ? date : today;
+    return this.footballService.getResultsOfDay(effectiveDate);
   }
 
   /** Melhores jogos do mundo (principais ligas no dia) */

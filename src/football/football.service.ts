@@ -1,27 +1,23 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import axios from 'axios';
 import { PredictionsService } from '../predictions/predictions.service';
-import { Prediction, PlanType } from '../predictions/prediction.entity';
+import { GenerationMeta } from './generation-meta.entity';
 
-interface ApiMatch {
+/** Partida com odds (football-data.org v4) — usada também na geração de prognósticos */
+export interface ApiMatch {
   id: number;
   homeTeam: { name: string };
   awayTeam: { name: string };
   competition: { name: string };
   utcDate: string;
+  status?: string;
   odds?: Array<{
     market: string;
     outcomes: Array<{ name: string; odds: string }>;
   }>;
-}
-
-type PredictionMarket = 'HOME_WIN' | 'DRAW' | 'AWAY_WIN';
-
-interface AiPredictionItem {
-  matchId: number;
-  market: PredictionMarket;
-  confidence: number; // 0..100
 }
 
 /** Partida com placar (resultado) - estrutura football-data.org v4 */
@@ -64,17 +60,15 @@ export interface MatchDetailDto extends MatchResultDto {
 export class FootballService {
   private readonly logger = new Logger(FootballService.name);
   private readonly apiKey: string;
-  private readonly openAiKey: string;
-  private readonly openAiModel: string;
   private readonly baseUrl = 'https://api.football-data.org/v4';
 
   constructor(
     private readonly config: ConfigService,
     private readonly predictionsService: PredictionsService,
+    @InjectRepository(GenerationMeta)
+    private readonly generationMetaRepo: Repository<GenerationMeta>,
   ) {
     this.apiKey = this.config.get<string>('FOOTBALL_API_KEY') || '';
-    this.openAiKey = this.config.get<string>('OPENAI_API_KEY') || '';
-    this.openAiModel = this.config.get<string>('OPENAI_MODEL') || 'gpt-4o-mini';
   }
 
   /** IDs das principais ligas do mundo (football-data.org) */
@@ -136,6 +130,33 @@ export class FootballService {
     } catch {
       return this.getMockMatchDetail(matchId);
     }
+  }
+
+  /**
+   * Jogos do dia ainda não disputados (SCHEDULED / TIMED), com odds carregadas quando possível.
+   * Usado pelo job de geração de prognósticos.
+   */
+  async getUpcomingMatchesForDate(date: string): Promise<ApiMatch[]> {
+    const raw = await this.fetchMatchesWithOdds(date);
+    const terminal = new Set(['FINISHED', 'POSTPONED', 'CANCELLED', 'AWARDED']);
+    const upcoming = new Set(['SCHEDULED', 'TIMED']);
+    return raw.filter((m) => {
+      const s = (m.status || '').toUpperCase();
+      if (terminal.has(s)) return false;
+      if (upcoming.has(s)) return true;
+      if (!s) {
+        this.logger.debug(
+          `Partida ${m.id} sem campo status na resposta da API; incluída como candidata.`,
+        );
+        return true;
+      }
+      return false;
+    });
+  }
+
+  /** Mapa 1X2 numérico a partir do primeiro mercado de vitória da casa disponível. */
+  getOddsMap(match: ApiMatch): Record<string, number | null> {
+    return this.extractOddsMap(match);
   }
 
   private async fetchMatchesByStatus(
@@ -243,21 +264,32 @@ export class FootballService {
     };
   }
 
-  /** Gera prognósticos do dia a partir da API (ou mock se sem chave) */
-  async generateDailyPredictions(date?: string): Promise<{ count: number }> {
-    const targetDate = date || this.predictionsService.today();
-    const raw = await this.fetchMatchesWithOdds(targetDate);
-    const predictions = this.openAiKey
-      ? await this.buildPredictionsWithAi(raw, targetDate)
-      : this.buildPredictionsFromMatches(raw, targetDate);
-    await this.predictionsService.clearByDate(targetDate);
-    const saved = await this.predictionsService.saveMany(predictions);
-    return { count: saved.length };
+  /** Resposta para o site: última corrida e descrição do cron. */
+  async getGenerationInfo(): Promise<{
+    lastAt: string | null;
+    lastCount: number | null;
+    scheduleDescription: string;
+    timezone: string;
+  }> {
+    const row = await this.generationMetaRepo.findOne({
+      where: { id: 'singleton' },
+    });
+    const tz = process.env.CRON_TZ || 'America/Sao_Paulo';
+    const tzLabel =
+      tz === 'America/Sao_Paulo'
+        ? 'Brasília'
+        : tz === 'Europe/Lisbon'
+          ? 'Lisboa'
+          : tz;
+    return {
+      lastAt: row?.lastPredictionsAt?.toISOString() ?? null,
+      lastCount: row?.lastCount ?? null,
+      scheduleDescription: `Todos os dias às 00:05 (${tzLabel})`,
+      timezone: tz,
+    };
   }
 
-  private async fetchMatchesWithOdds(
-    date: string,
-  ): Promise<ApiMatch[]> {
+  private async fetchMatchesWithOdds(date: string): Promise<ApiMatch[]> {
     if (!this.apiKey) {
       return this.getMockMatches(date);
     }
@@ -273,7 +305,7 @@ export class FootballService {
       );
       const matches = data.matches || [];
       const withOdds = await Promise.all(
-        matches.slice(0, 50).map((m) => this.enrichWithOdds(m)),
+        matches.slice(0, 120).map((m) => this.enrichWithOdds(m)),
       );
       return withOdds.filter((m) => m.odds && m.odds.length > 0);
     } catch {
@@ -295,6 +327,7 @@ export class FootballService {
 
   private getMockMatches(date: string): ApiMatch[] {
     const base = new Date(date + 'T15:00:00Z').getTime();
+    const status = 'SCHEDULED';
     return [
       {
         id: 1,
@@ -302,6 +335,7 @@ export class FootballService {
         awayTeam: { name: 'Time B' },
         competition: { name: 'Liga Nacional' },
         utcDate: new Date(base).toISOString(),
+        status,
         odds: [
           {
             market: 'HOME_WIN',
@@ -319,6 +353,7 @@ export class FootballService {
         awayTeam: { name: 'Time D' },
         competition: { name: 'Liga Sul' },
         utcDate: new Date(base + 7200000).toISOString(),
+        status,
         odds: [
           {
             market: 'HOME_WIN',
@@ -336,142 +371,91 @@ export class FootballService {
         awayTeam: { name: 'Time F' },
         competition: { name: 'Copa' },
         utcDate: new Date(base + 14400000).toISOString(),
+        status,
         odds: [
           {
             market: 'HOME_WIN',
             outcomes: [
-              { name: 'Home', odds: '1.55' },
+              { name: 'Home', odds: '1.68' },
               { name: 'Draw', odds: '4.00' },
               { name: 'Away', odds: '5.50' },
             ],
           },
         ],
       },
-    ];
-  }
-
-  private buildPredictionsFromMatches(
-    matches: ApiMatch[],
-    predictionDate: string,
-  ): Partial<Prediction>[] {
-    const list: Partial<Prediction>[] = [];
-    for (const m of matches) {
-      const homeWin = m.odds
-        ?.flatMap((o) => o.outcomes)
-        .find((x) => x.name === 'Home');
-      if (!homeWin) continue;
-      const odd = parseFloat(homeWin.odds);
-      const probability = this.oddToProbability(odd);
-      const minPlan = this.probabilityToPlan(probability);
-      list.push({
-        matchId: String(m.id),
-        homeTeam: m.homeTeam.name,
-        awayTeam: m.awayTeam.name,
-        league: m.competition.name,
-        startTime: new Date(m.utcDate),
-        market: 'HOME_WIN',
-        probability,
-        odd,
-        minPlan,
-        predictionDate,
-      });
-    }
-    return list.sort((a, b) => (b.probability ?? 0) - (a.probability ?? 0));
-  }
-
-  private async buildPredictionsWithAi(
-    matches: ApiMatch[],
-    predictionDate: string,
-  ): Promise<Partial<Prediction>[]> {
-    if (!matches.length || !this.openAiKey) {
-      return this.buildPredictionsFromMatches(matches, predictionDate);
-    }
-
-    try {
-      const inputMatches = matches.slice(0, 30).map((m) => ({
-        matchId: m.id,
-        homeTeam: m.homeTeam.name,
-        awayTeam: m.awayTeam.name,
-        league: m.competition.name,
-        startTime: m.utcDate,
-        odds: this.extractOddsMap(m),
-      }));
-
-      const prompt = [
-        'Você é um analista de apostas esportivas.',
-        'Para cada jogo, escolha EXATAMENTE um mercado entre HOME_WIN, DRAW, AWAY_WIN.',
-        'Retorne APENAS JSON válido, sem markdown e sem texto extra.',
-        'Formato obrigatório:',
-        '{"predictions":[{"matchId":123,"market":"HOME_WIN","confidence":68}]}',
-        'confidence é percentual inteiro de 51 a 95.',
-        'Nunca retorne matchId duplicado.',
-        `Jogos: ${JSON.stringify(inputMatches)}`,
-      ].join('\n');
-
-      const { data } = await axios.post(
-        'https://api.openai.com/v1/chat/completions',
-        {
-          model: this.openAiModel,
-          temperature: 0.2,
-          response_format: { type: 'json_object' },
-          messages: [{ role: 'user', content: prompt }],
-        },
-        {
-          timeout: 25000,
-          headers: {
-            Authorization: `Bearer ${this.openAiKey}`,
-            'Content-Type': 'application/json',
+      {
+        id: 4,
+        homeTeam: { name: 'Time G' },
+        awayTeam: { name: 'Time H' },
+        competition: { name: 'Série B' },
+        utcDate: new Date(base + 21600000).toISOString(),
+        status,
+        odds: [
+          {
+            market: 'HOME_WIN',
+            outcomes: [
+              { name: 'Home', odds: '2.10' },
+              { name: 'Draw', odds: '3.20' },
+              { name: 'Away', odds: '3.40' },
+            ],
           },
-        },
-      );
-
-      const content = data?.choices?.[0]?.message?.content;
-      const parsed = this.parseAiPayload(content);
-      const byId = new Map(matches.map((m) => [m.id, m]));
-      const list: Partial<Prediction>[] = [];
-
-      for (const row of parsed) {
-        const match = byId.get(row.matchId);
-        if (!match) continue;
-        const odd = this.pickOddByMarket(match, row.market);
-        if (!odd) continue;
-        const probability = Math.min(0.95, Math.max(0.51, row.confidence / 100));
-        list.push({
-          matchId: String(match.id),
-          homeTeam: match.homeTeam.name,
-          awayTeam: match.awayTeam.name,
-          league: match.competition.name,
-          startTime: new Date(match.utcDate),
-          market: row.market,
-          probability,
-          odd,
-          minPlan: this.probabilityToPlan(probability),
-          predictionDate,
-        });
-      }
-
-      if (list.length) {
-        return list.sort((a, b) => (b.probability ?? 0) - (a.probability ?? 0));
-      }
-    } catch (err) {
-      this.logger.warn(
-        `Falha ao gerar com IA (${this.openAiModel}), usando fallback por odds.`,
-      );
-    }
-
-    return this.buildPredictionsFromMatches(matches, predictionDate);
-  }
-
-  private parseAiPayload(content: string): AiPredictionItem[] {
-    if (!content) return [];
-    try {
-      const json = JSON.parse(content) as { predictions?: AiPredictionItem[] };
-      return (json.predictions || []).filter((p) =>
-        ['HOME_WIN', 'DRAW', 'AWAY_WIN'].includes(p.market),
-      );
-    } catch {
-      return [];
-    }
+        ],
+      },
+      {
+        id: 5,
+        homeTeam: { name: 'Time I' },
+        awayTeam: { name: 'Time J' },
+        competition: { name: 'Estadual' },
+        utcDate: new Date(base + 28800000).toISOString(),
+        status,
+        odds: [
+          {
+            market: 'HOME_WIN',
+            outcomes: [
+              { name: 'Home', odds: '1.85' },
+              { name: 'Draw', odds: '3.50' },
+              { name: 'Away', odds: '4.20' },
+            ],
+          },
+        ],
+      },
+      {
+        id: 6,
+        homeTeam: { name: 'Time K' },
+        awayTeam: { name: 'Time L' },
+        competition: { name: 'Copa regional' },
+        utcDate: new Date(base + 36000000).toISOString(),
+        status,
+        odds: [
+          {
+            market: 'HOME_WIN',
+            outcomes: [
+              { name: 'Home', odds: '2.25' },
+              { name: 'Draw', odds: '3.10' },
+              { name: 'Away', odds: '3.15' },
+            ],
+          },
+        ],
+      },
+      {
+        id: 7,
+        homeTeam: { name: 'Time M' },
+        awayTeam: { name: 'Time N' },
+        competition: { name: 'Amistoso' },
+        utcDate: new Date(base + 43200000).toISOString(),
+        status,
+        odds: [
+          {
+            market: 'HOME_WIN',
+            outcomes: [
+              { name: 'Home', odds: '1.62' },
+              { name: 'Draw', odds: '3.90' },
+              { name: 'Away', odds: '5.10' },
+            ],
+          },
+        ],
+      },
+    ];
   }
 
   private extractOddsMap(match: ApiMatch): Record<string, number | null> {
@@ -484,25 +468,5 @@ export class FootballService {
       DRAW: draw ? parseFloat(draw.odds) : null,
       AWAY_WIN: away ? parseFloat(away.odds) : null,
     };
-  }
-
-  private pickOddByMarket(match: ApiMatch, market: PredictionMarket): number | null {
-    const odds = this.extractOddsMap(match);
-    const value = odds[market];
-    if (!value || Number.isNaN(value) || value <= 1) return null;
-    return value;
-  }
-
-  private oddToProbability(odd: number): number {
-    const implied = 1 / odd;
-    const margin = 1.05;
-    return Math.min(0.99, implied * margin);
-  }
-
-  private probabilityToPlan(probability: number): PlanType {
-    if (probability >= 0.65) return PlanType.FREE;
-    if (probability >= 0.58) return PlanType.DAILY;
-    if (probability >= 0.52) return PlanType.WEEKLY;
-    return PlanType.PREMIUM;
   }
 }

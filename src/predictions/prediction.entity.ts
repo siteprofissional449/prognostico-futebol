@@ -5,6 +5,8 @@ export enum PlanType {
   FREE = 'FREE',
   DAILY = 'DAILY',
   WEEKLY = 'WEEKLY',
+  MONTHLY = 'MONTHLY',
+  /** Compatibilidade legada; mapeado ao tier de MONTHLY. */
   PREMIUM = 'PREMIUM',
 }
 
@@ -37,9 +39,27 @@ export class Prediction {
   @Column({ type: 'decimal', precision: 5, scale: 2 })
   odd: number;
 
+  /** Probabilidades modelo 1X2 (0–1), preenchidas pela geração automática */
+  @Column({ type: 'decimal', precision: 6, scale: 4, nullable: true })
+  probHome: number | null;
+
+  @Column({ type: 'decimal', precision: 6, scale: 4, nullable: true })
+  probDraw: number | null;
+
+  @Column({ type: 'decimal', precision: 6, scale: 4, nullable: true })
+  probAway: number | null;
+
+  /** Código do melhor palpite (ex.: HOME_WIN) — espelho legível de `market` */
+  @Column({ type: 'text', nullable: true })
+  bestBet: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  analysis: string | null;
+
   @Column({ type: 'varchar', default: PlanType.FREE })
   minPlan: PlanType;
 
+  /** Data civil (YYYY-MM-DD) do conjunto de prognósticos */
   @Column({ type: 'date' })
   predictionDate: string;
 

@@ -9,7 +9,7 @@ import { MercadoPagoConfig, Preference, Payment } from 'mercadopago';
 import { PlansService } from '../plans/plans.service';
 import { UsersService } from '../users/users.service';
 
-const PAID_PLAN_CODES = ['DAILY', 'WEEKLY', 'PREMIUM'] as const;
+const PAID_PLAN_CODES = ['DAILY', 'WEEKLY', 'MONTHLY', 'PREMIUM'] as const;
 type PaidPlanCode = (typeof PAID_PLAN_CODES)[number];
 
 @Injectable()
@@ -41,12 +41,14 @@ export class MercadoPagoPaymentsService {
     email: string,
     planCode: string,
   ): Promise<{ url: string }> {
-    if (!PAID_PLAN_CODES.includes(planCode as PaidPlanCode)) {
+    const normalized = planCode.trim().toUpperCase();
+    if (!PAID_PLAN_CODES.includes(normalized as PaidPlanCode)) {
       throw new BadRequestException(
-        'Plano inválido. Use DAILY, WEEKLY ou PREMIUM.',
+        'Plano inválido. Use DAILY, WEEKLY ou MONTHLY.',
       );
     }
-    const plan = await this.plansService.findByCode(planCode);
+    const canonical = normalized === 'PREMIUM' ? 'MONTHLY' : normalized;
+    const plan = await this.plansService.findByCode(canonical);
     if (!plan || Number(plan.price) <= 0) {
       throw new BadRequestException('Plano não encontrado ou grátis.');
     }
@@ -57,13 +59,13 @@ export class MercadoPagoPaymentsService {
     const apiPublic =
       this.config.get<string>('API_PUBLIC_URL')?.replace(/\/$/, '') || '';
 
-    const externalReference = `sg:${userId}:${planCode}`;
+    const externalReference = `sg:${userId}:${canonical}`;
     const preference = new Preference(this.mpConfig());
 
     const body = {
       items: [
         {
-          id: planCode,
+          id: canonical,
           title: plan.name,
           description: plan.description ?? `SmartGol — ${plan.name}`,
           quantity: 1,
@@ -133,8 +135,8 @@ export class MercadoPagoPaymentsService {
       const userId = parts[1];
       const planCode = parts[2] as PaidPlanCode;
       if (!PAID_PLAN_CODES.includes(planCode)) return;
-
-      const plan = await this.plansService.findByCode(planCode);
+      const canonical = planCode === 'PREMIUM' ? 'MONTHLY' : planCode;
+      const plan = await this.plansService.findByCode(canonical);
       if (!plan) return;
 
       const paid = Number(pay.transaction_amount);
@@ -146,8 +148,8 @@ export class MercadoPagoPaymentsService {
         return;
       }
 
-      await this.usersService.grantSubscriptionByPlanCode(userId, planCode);
-      this.logger.log(`Plano ${planCode} liberado para usuário ${userId} (pagamento ${paymentId}).`);
+      await this.usersService.grantSubscriptionByPlanCode(userId, canonical);
+      this.logger.log(`Plano ${canonical} liberado para usuário ${userId} (pagamento ${paymentId}).`);
     } catch (e) {
       this.logger.error(
         `Erro ao processar webhook MP: ${e instanceof Error ? e.message : e}`,

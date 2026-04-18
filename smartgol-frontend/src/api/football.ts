@@ -1,11 +1,9 @@
 import { api } from './client';
-import type { MatchResult, MatchDetail } from '../types';
+import type { MatchResult, MatchDetail, GenerationInfo } from '../types';
 
-/** Gera prognósticos na API para uma data (busca jogos na API externa). */
-export async function generatePredictionsForDate(date: string): Promise<{ count: number }> {
-  return api<{ count: number }>(`/football/generate-today?date=${encodeURIComponent(date)}`, {
-    method: 'POST',
-  });
+/** Última geração automática + horário do agendamento (público). */
+export async function getGenerationInfo(): Promise<GenerationInfo> {
+  return api<GenerationInfo>('/football/generation-info');
 }
 
 export async function getResultsOfDay(date?: string): Promise<MatchResult[]> {

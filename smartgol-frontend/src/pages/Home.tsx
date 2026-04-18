@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react';
-import { Title, Text, SimpleGrid, Loader, Alert, Tabs, Group, Button, Stack } from '@mantine/core';
-import { notifications } from '@mantine/notifications';
-import { IconCalendarEvent, IconTrophy, IconChartBar, IconChevronLeft, IconChevronRight, IconCloudDownload } from '@tabler/icons-react';
-import { getPublicPredictions, getMyPredictions } from '../api/predictions';
-import { getResultsOfDay, getTopLeaguesMatches, getMatchDetail, generatePredictionsForDate } from '../api/football';
+import { Link } from 'react-router-dom';
+import { Title, Text, SimpleGrid, Loader, Alert, Tabs, Group, Button, Paper, ThemeIcon } from '@mantine/core';
+import { IconCalendarEvent, IconTrophy, IconChartBar, IconChevronLeft, IconChevronRight, IconClock } from '@tabler/icons-react';
+import { getHomePredictions } from '../api/predictions';
+import { getResultsOfDay, getTopLeaguesMatches, getMatchDetail, getGenerationInfo } from '../api/football';
 import { useAuth } from '../contexts/AuthContext';
 import { GameCard } from '../components/GameCard';
 import { ResultCard } from '../components/ResultCard';
 import { MatchDetailModal } from '../components/MatchDetailModal';
-import type { Prediction, MatchResult, MatchDetail } from '../types';
+import type { PredictionView, MatchResult, MatchDetail, GenerationInfo } from '../types';
 import type { PlanType } from '../types';
 
 function todayISO() {
@@ -41,6 +41,20 @@ function isToday(dateStr: string): boolean {
   return dateStr === todayISO();
 }
 
+function formatDateTimePt(iso: string): string {
+  try {
+    return new Date(iso).toLocaleString('pt-BR', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return iso;
+  }
+}
+
 /** Plano grátis: só pode buscar dia anterior e dia seguinte (não passa disso) */
 function isFreePlan(plan: PlanType | null, isLoggedIn: boolean): boolean {
   return !isLoggedIn || plan === 'FREE' || plan === null;
@@ -56,10 +70,8 @@ export function Home() {
   const canGoPrev = !freePlan || date > yesterday;
   const canGoNext = !freePlan || date < tomorrow;
 
-  /** Jogos: dia anterior, dia atual, próximo dia */
-  const [predictionsPrev, setPredictionsPrev] = useState<Prediction[]>([]);
-  const [predictionsCur, setPredictionsCur] = useState<Prediction[]>([]);
-  const [predictionsNext, setPredictionsNext] = useState<Prediction[]>([]);
+  /** Jogos do dia na home (teaser de até 3). */
+  const [predictionsCur, setPredictionsCur] = useState<PredictionView[]>([]);
   const [predictionsLoading, setPredictionsLoading] = useState(true);
   const [predictionsError, setPredictionsError] = useState<string | null>(null);
 
@@ -73,22 +85,25 @@ export function Home() {
 
   const [detailMatch, setDetailMatch] = useState<MatchDetail | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
-  const [generatingNextDay, setGeneratingNextDay] = useState(false);
+  const [genInfo, setGenInfo] = useState<GenerationInfo | null>(null);
+  const [genInfoError, setGenInfoError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    getGenerationInfo()
+      .then((data) => {
+        if (!cancelled) setGenInfo(data);
+      })
+      .catch(() => {
+        if (!cancelled) setGenInfoError(true);
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   const fetchPredictions = () => {
-    const fetchPlan: PlanType = plan || 'FREE';
-    const datePrev = addDays(date, -1);
-    const dateNext = addDays(date, 1);
-    const fetcher = (d: string) =>
-      isLoggedIn ? getMyPredictions(d) : getPublicPredictions(fetchPlan, d);
-    return Promise.all([
-      fetcher(datePrev),
-      fetcher(date),
-      fetcher(dateNext),
-    ]).then(([prev, cur, next]) => {
-      setPredictionsPrev(Array.isArray(prev) ? prev : []);
+    return getHomePredictions(date).then((r) => {
+      const cur = r.items || [];
       setPredictionsCur(Array.isArray(cur) ? cur : []);
-      setPredictionsNext(Array.isArray(next) ? next : []);
     });
   };
 
@@ -104,27 +119,7 @@ export function Home() {
         if (!cancelled) setPredictionsLoading(false);
       });
     return () => { cancelled = true; };
-  }, [isLoggedIn, plan, date]);
-
-  const handleBuscarDiaSeguinteNaApi = () => {
-    const dateNext = addDays(date, 1);
-    setGeneratingNextDay(true);
-    generatePredictionsForDate(dateNext)
-      .then(({ count }) => {
-        notifications.show({
-          color: 'green',
-          message: `${count} jogo(s) do dia seguinte carregado(s) na API.`,
-        });
-        return fetchPredictions();
-      })
-      .catch((e) => {
-        notifications.show({
-          color: 'red',
-          message: e?.message || 'Erro ao buscar jogos do dia seguinte na API.',
-        });
-      })
-      .finally(() => setGeneratingNextDay(false));
-  };
+  }, [date]);
 
   useEffect(() => {
     let cancelled = false;
@@ -181,6 +176,51 @@ export function Home() {
   return (
     <div style={{ padding: '1.5rem' }}>
       <Title order={1} mb="xs">SmartGol</Title>
+
+      {genInfoError && (
+        <Alert color="orange" variant="light" mb="md" title="Geração automática">
+          Não foi possível contactar a API para o estado da última geração. Confirme se o backend está ligado.
+        </Alert>
+      )}
+
+      {genInfo && !genInfoError && (
+        <Paper withBorder p="md" radius="md" mb="lg">
+          <Group gap="md" align="flex-start" wrap="nowrap">
+            <ThemeIcon size="lg" variant="light" color="teal" radius="md">
+              <IconClock size={22} />
+            </ThemeIcon>
+            <div>
+              <Text fw={600} size="sm" mb={4}>
+                Prognósticos automáticos
+              </Text>
+              <Text size="sm" c="dimmed" mb="xs">
+                {genInfo.scheduleDescription}
+                {' · '}
+                Grátis: até 6 jogos com maior confiança; assinantes veem todos (odd &gt; 1,6).
+              </Text>
+              {genInfo.lastAt ? (
+                <Text size="sm">
+                  Última geração registada:{' '}
+                  <Text span fw={500} c="teal.4">
+                    {formatDateTimePt(genInfo.lastAt)}
+                  </Text>
+                  {genInfo.lastCount != null && (
+                    <Text span c="dimmed" size="sm">
+                      {' '}
+                      ({genInfo.lastCount} palpite{genInfo.lastCount === 1 ? '' : 's'})
+                    </Text>
+                  )}
+                </Text>
+              ) : (
+                <Text size="sm" c="dimmed">
+                  Ainda não há registo de geração neste servidor (corre ao gerar pela API ou no horário agendado).
+                </Text>
+              )}
+            </div>
+          </Group>
+        </Paper>
+      )}
+
       <Group justify="space-between" align="flex-end" wrap="wrap" gap="sm" mb="lg">
         <div>
           <Text c="dimmed" size="sm">
@@ -233,75 +273,44 @@ export function Home() {
       <Tabs defaultValue="jogos">
         <Tabs.List mb="lg">
           <Tabs.Tab value="jogos" leftSection={<IconCalendarEvent size={16} />}>
-            Jogos do dia
+            Jogos
           </Tabs.Tab>
           <Tabs.Tab value="resultados" leftSection={<IconChartBar size={16} />}>
-            Resultados do dia
+            Resultados
           </Tabs.Tab>
           <Tabs.Tab value="destaques" leftSection={<IconTrophy size={16} />}>
-            Melhores jogos do mundo
+            Destaques
           </Tabs.Tab>
         </Tabs.List>
 
         <Tabs.Panel value="jogos">
+          <Text size="sm" c="dimmed" mb="md">
+            Veja os melhores jogos de hoje. Para a lista completa de palpites, acesse{' '}
+            <Link to="/prognosticos" style={{ color: 'var(--mantine-color-green-4)' }}>
+              Palpites
+            </Link>
+            .
+          </Text>
           {predictionsError && (
             <Alert color="red" mb="md">{predictionsError}</Alert>
           )}
           {predictionsLoading ? (
             <Loader size="lg" />
           ) : (
-            <Stack gap="xl">
-              <div>
-                <Title order={4} mb="xs" c="dimmed">Dia anterior — {formatDateLabel(addDays(date, -1))}</Title>
-                {predictionsPrev.length === 0 ? (
-                  <Text size="sm" c="dimmed">Nenhum jogo.</Text>
-                ) : (
-                  <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md">
-                    {predictionsPrev.map((p) => (
-                      <GameCard key={p.id} p={p} />
-                    ))}
-                  </SimpleGrid>
-                )}
-              </div>
-              <div>
-                <Title order={4} mb="xs">Hoje — {formatDateLabel(date)}</Title>
-                {predictionsCur.length === 0 ? (
-                  <Text size="sm" c="dimmed">Nenhum jogo. Gere os prognósticos no backend (POST /football/generate-today).</Text>
-                ) : (
-                  <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md">
-                    {predictionsCur.map((p) => (
-                      <GameCard key={p.id} p={p} />
-                    ))}
-                  </SimpleGrid>
-                )}
-              </div>
-              <div>
-                <Group justify="space-between" align="flex-end" mb="xs" wrap="wrap" gap="xs">
-                  <div>
-                    <Title order={4} c="dimmed">Dia seguinte — {formatDateLabel(addDays(date, 1))}</Title>
-                    <Text size="xs" c="dimmed">Busca dos jogos do dia seguinte na API.</Text>
-                  </div>
-                  <Button
-                    variant="light"
-                    size="xs"
-                    leftSection={<IconCloudDownload size={16} />}
-                    loading={generatingNextDay}
-                    onClick={handleBuscarDiaSeguinteNaApi}
-                  >
-                    Buscar jogos do dia seguinte na API
-                  </Button>
-                </Group>
-                {predictionsNext.length === 0 ? (
-                  <Text size="sm" c="dimmed">Nenhum jogo. Clique em "Buscar jogos do dia seguinte na API" para carregar.</Text>
-                ) : (
-                  <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md">
-                    {predictionsNext.map((p) => (
-                      <GameCard key={p.id} p={p} />
-                    ))}
-                  </SimpleGrid>
-                )}
-              </div>
-            </Stack>
+            <div>
+              <Title order={4} mb="xs">Hoje — {formatDateLabel(date)}</Title>
+              {predictionsCur.length === 0 ? (
+                <Text size="sm" c="dimmed">
+                  Nenhum jogo com palpite disponível para esta data.
+                </Text>
+              ) : (
+                <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md">
+                  {predictionsCur.map((p) => (
+                    <GameCard key={p.id} p={p} />
+                  ))}
+                </SimpleGrid>
+              )}
+            </div>
           )}
         </Tabs.Panel>
 

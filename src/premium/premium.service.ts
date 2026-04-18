@@ -13,11 +13,10 @@ const PLAN_ORDER: Record<PrognosticPlan, number> = {
   [PrognosticPlan.PREMIUM]: 3,
 };
 
-/** VIP legado no banco = mesmo nível que PREMIUM */
+/** Plano mínimo do prognóstico (hierarquia FREE → PREMIUM). */
 function prognosticRequiredTier(plan: string): number {
-  if (plan === 'VIP') return PLAN_ORDER[PrognosticPlan.PREMIUM];
   const p = plan as PrognosticPlan;
-  return PLAN_ORDER[p] ?? 0;
+  return PLAN_ORDER[p] ?? PLAN_ORDER[PrognosticPlan.PREMIUM];
 }
 
 function localDateKey(d: Date): string {
@@ -65,8 +64,9 @@ export class PremiumService {
   }
 
   private planToTier(plan: string): number {
-    if (plan === 'VIP') return PLAN_ORDER[PrognosticPlan.PREMIUM];
-    if (plan === 'PREMIUM') return PLAN_ORDER[PrognosticPlan.PREMIUM];
+    if (plan === 'MONTHLY' || plan === 'PREMIUM') {
+      return PLAN_ORDER[PrognosticPlan.PREMIUM];
+    }
     if (plan === 'WEEKLY') return PLAN_ORDER[PrognosticPlan.WEEKLY];
     if (plan === 'DAILY') return PLAN_ORDER[PrognosticPlan.DAILY];
     return PLAN_ORDER[PrognosticPlan.FREE];

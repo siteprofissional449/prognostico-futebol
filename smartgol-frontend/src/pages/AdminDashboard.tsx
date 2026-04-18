@@ -1,10 +1,17 @@
 import { useEffect, useState } from 'react';
-import { Paper, SimpleGrid, Text, Title } from '@mantine/core';
-import { getAdminStats } from '../api/admin';
+import { Button, Group, Paper, SimpleGrid, Text, TextInput, Title } from '@mantine/core';
+import { IconSparkles } from '@tabler/icons-react';
+import { adminGeneratePredictions, getAdminStats } from '../api/admin';
 import { notifications } from '@mantine/notifications';
+
+function todayISO() {
+  return new Date().toISOString().slice(0, 10);
+}
 
 export function AdminDashboard() {
   const [stats, setStats] = useState<{ userCount: number; predictionCount: number } | null>(null);
+  const [genDate, setGenDate] = useState('');
+  const [generating, setGenerating] = useState(false);
 
   useEffect(() => {
     getAdminStats()
@@ -16,6 +23,27 @@ export function AdminDashboard() {
         });
       });
   }, []);
+
+  const runGenerate = async () => {
+    setGenerating(true);
+    try {
+      const dateArg = genDate.trim() || undefined;
+      const r = await adminGeneratePredictions(dateArg);
+      notifications.show({
+        color: 'green',
+        title: 'Geração concluída',
+        message: `${r.count} palpite(s) gravado(s).`,
+      });
+    } catch (e) {
+      notifications.show({
+        color: 'red',
+        title: 'Falha na geração',
+        message: e instanceof Error ? e.message : 'Erro desconhecido',
+      });
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   return (
     <>
@@ -40,6 +68,31 @@ export function AdminDashboard() {
           </Title>
         </Paper>
       </SimpleGrid>
+
+      <Paper p="lg" radius="md" withBorder mt="xl">
+        <Text size="sm" c="dimmed" tt="uppercase" fw={600} mb="xs">
+          Geração automática (IA + API futebol)
+        </Text>
+        <Text size="sm" c="dimmed" mb="md">
+          O mesmo fluxo do cron. Deixe a data vazia para o dia de hoje ({todayISO()} UTC). Só administradores.
+        </Text>
+        <Group align="flex-end" wrap="wrap">
+          <TextInput
+            label="Data (opcional)"
+            placeholder="YYYY-MM-DD"
+            value={genDate}
+            onChange={(e) => setGenDate(e.currentTarget.value)}
+            w={200}
+          />
+          <Button
+            leftSection={<IconSparkles size={18} />}
+            loading={generating}
+            onClick={runGenerate}
+          >
+            Gerar prognósticos
+          </Button>
+        </Group>
+      </Paper>
     </>
   );
 }

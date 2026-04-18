@@ -1,0 +1,65 @@
+.bar {
+  display: none;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 45;
+  justify-content: space-around;
+  align-items: stretch;
+  gap: 0;
+  padding: 0.35rem 0.2rem calc(0.35rem + env(safe-area-inset-bottom, 0px));
+  background: color-mix(in srgb, var(--mantine-color-dark-7) 92%, transparent);
+  border-top: 1px solid var(--mantine-color-dark-4);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+@media (max-width: 47.99em) {
+  .bar {
+    display: flex;
+  }
+}
+
+.item {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+  padding: 0.2rem 0.1rem;
+  text-decoration: none;
+  color: var(--mantine-color-gray-5);
+  border-radius: var(--mantine-radius-sm);
+  transition: color 120ms ease, background-color 120ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.item:active {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.icon {
+  flex-shrink: 0;
+}
+
+.label {
+  font-size: 0.62rem;
+  font-weight: 600;
+  line-height: 1.1;
+  text-align: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.active {
+  color: var(--mantine-color-green-4);
+}
+
+.active .icon {
+  color: var(--mantine-color-green-4);
+}

@@ -10,9 +10,16 @@ export class PremiumGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
     const req = context.switchToHttp().getRequest<{ user?: { plan?: string } }>();
     const plan = req.user?.plan;
-    if (plan === 'DAILY' || plan === 'WEEKLY' || plan === 'PREMIUM') return true;
+    if (
+      plan === 'DAILY' ||
+      plan === 'WEEKLY' ||
+      plan === 'MONTHLY' ||
+      plan === 'PREMIUM'
+    ) {
+      return true;
+    }
     throw new ForbiddenException(
-      'Área exclusiva para assinantes (Diário, Semanal ou Premium).',
+      'Área exclusiva para assinantes (Diário, Semanal ou Mensal).',
     );
   }
 }
