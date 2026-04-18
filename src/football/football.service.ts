@@ -324,13 +324,15 @@ export class FootballService {
       const withOdds = await Promise.all(
         matches.slice(0, 120).map((m) => this.enrichWithOdds(m)),
       );
-      const filtered = withOdds.filter((m) => m.odds && m.odds.length > 0);
-      if (filtered.length === 0) {
+      const withLoadedOdds = withOdds.filter((m) => m.odds && m.odds.length > 0);
+      if (withLoadedOdds.length === 0 && matches.length > 0) {
         this.logger.warn(
-          `Football-Data: ${matches.length} partida(s) em ${date}, mas nenhuma com odds carregáveis (plano/endpoint).`,
+          `Football-Data: ${matches.length} partida(s) em ${date}, mas odds não carregaram (muito comum no plano free: endpoint /matches/{id}/odds). ` +
+            `A geração ainda pode prosseguir com IA se OPENAI_API_KEY estiver configurada.`,
         );
+        return withOdds;
       }
-      return filtered;
+      return withLoadedOdds;
     } catch (e) {
       this.logger.warn(
         `Football-Data (matches+odds) falhou para ${date}: ${

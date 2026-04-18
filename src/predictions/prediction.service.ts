@@ -42,6 +42,8 @@ export type GenerateDailyPredictionsResult = {
   candidates: number;
   skippedDuplicate: number;
   skippedNoOdds: number;
+  skippedNoOpenAi: number;
+  skippedAiFailed: number;
   skippedOddTooLow: number;
   skippedErrors: number;
   built: number;
@@ -78,7 +80,9 @@ export class PredictionService {
 
     const matches = await this.football.getUpcomingMatchesForDate(targetDate);
     if (!matches.length) {
-      this.logger.warn(`Nenhum jogo SCHEDULED/TIMED com odds para ${targetDate}.`);
+      this.logger.warn(
+        `Nenhum jogo candidato (SCHEDULED/TIMED) para ${targetDate} após buscar partidas/odds.`,
+      );
       await this.recordGenerationMeta(0);
       return {
         count: 0,
@@ -86,17 +90,21 @@ export class PredictionService {
         candidates: 0,
         skippedDuplicate: 0,
         skippedNoOdds: 0,
+        skippedNoOpenAi: 0,
+        skippedAiFailed: 0,
         skippedOddTooLow: 0,
         skippedErrors: 0,
         built: 0,
         afterOddFilter: 0,
-        reason: 'SEM_JOGOS_COM_ODDS',
+        reason: 'SEM_PARTIDAS_CANDIDATAS',
       };
     }
 
     const pending: Partial<Prediction>[] = [];
     let skippedDuplicate = 0;
     let skippedNoOdds = 0;
+    let skippedNoOpenAi = 0;
+    let skippedAiFailed = 0;
     let skippedOddTooLow = 0;
     let skippedErrors = 0;
 
@@ -108,33 +116,75 @@ export class PredictionService {
           skippedDuplicate += 1;
           continue;
         }
-        if (!this.hasUsableOdds(m)) {
-          this.logger.warn(`Jogo ${mid}: odds 1X2 insuficientes; ignorado.`);
-          skippedNoOdds += 1;
-          continue;
-        }
 
+        const oddsOk = this.hasUsableOdds(m);
         let core: PredictionCore;
-        if (this.openAiKey) {
+        if (oddsOk) {
+          if (this.openAiKey) {
+            try {
+              core = await this.buildPredictionsWithAi(m);
+            } catch (e) {
+              this.logger.warn(
+                `IA falhou para jogo ${mid} (${e instanceof Error ? e.message : e}); fallback por odds.`,
+              );
+              try {
+                core = this.buildPredictionsFromOdds(m);
+              } catch (e2) {
+                this.logger.warn(
+                  `Fallback por odds falhou para jogo ${mid} (${
+                    e2 instanceof Error ? e2.message : e2
+                  }); ignorado.`,
+                );
+                skippedErrors += 1;
+                continue;
+              }
+            }
+          } else {
+            core = this.buildPredictionsFromOdds(m);
+          }
+        } else if (this.openAiKey) {
           try {
             core = await this.buildPredictionsWithAi(m);
           } catch (e) {
             this.logger.warn(
-              `IA falhou para jogo ${mid} (${e instanceof Error ? e.message : e}); fallback por odds.`,
+              `IA falhou para jogo ${mid} sem odds 1X2 (${
+                e instanceof Error ? e.message : e
+              }); ignorado.`,
             );
-            core = this.buildPredictionsFromOdds(m);
+            skippedAiFailed += 1;
+            continue;
           }
         } else {
-          core = this.buildPredictionsFromOdds(m);
+          this.logger.warn(
+            `Jogo ${mid}: sem odds 1X2 e sem OPENAI_API_KEY — não dá para gerar com o pipeline atual.`,
+          );
+          skippedNoOdds += 1;
+          skippedNoOpenAi += 1;
+          continue;
         }
 
-        const odd = this.pickOddForMarket(m, core.market);
+        const apiOdd = this.pickOddForMarket(m, core.market);
+        const probForMarket =
+          core.market === 'HOME_WIN'
+            ? core.probHome
+            : core.market === 'DRAW'
+              ? core.probDraw
+              : core.probAway;
+        const impliedFromAi = this.impliedDecimalOddFromProbability(probForMarket);
+        const odd = apiOdd ?? impliedFromAi;
         if (odd == null || odd <= MIN_ODD_THRESHOLD) {
           this.logger.warn(
             `Jogo ${mid}: odd inválida (${odd}) para ${core.market}; ignorado.`,
           );
           skippedOddTooLow += 1;
           continue;
+        }
+        if (apiOdd == null && impliedFromAi != null) {
+          this.logger.debug(
+            `Jogo ${mid}: sem odd da API para ${core.market}; usando odd implícita estimada (~${impliedFromAi.toFixed(
+              2,
+            )}) a partir das probabilidades da IA.`,
+          );
         }
 
         const probability =
@@ -193,8 +243,10 @@ export class PredictionService {
     } else if (pending.length === 0) {
       if (skippedDuplicate >= matches.length) {
         reason = 'TODOS_DUPLICADOS';
-      } else if (skippedNoOdds >= matches.length) {
-        reason = 'SEM_ODDS_1X2';
+      } else if (skippedNoOdds >= matches.length && !this.openAiKey) {
+        reason = 'SEM_ODDS_SEM_IA';
+      } else if (skippedAiFailed >= matches.length) {
+        reason = 'ERROS_IA';
       } else if (skippedErrors > 0) {
         reason = 'ERROS_PROCESSAMENTO';
       } else {
@@ -212,6 +264,8 @@ export class PredictionService {
       candidates: matches.length,
       skippedDuplicate,
       skippedNoOdds,
+      skippedNoOpenAi,
+      skippedAiFailed,
       skippedOddTooLow,
       skippedErrors,
       built: pending.length,
@@ -231,6 +285,15 @@ export class PredictionService {
     const timeA = match.homeTeam.name;
     const timeB = match.awayTeam.name;
     const odds = this.football.getOddsMap(match);
+    const oddsLine =
+      odds.HOME_WIN != null &&
+      odds.DRAW != null &&
+      odds.AWAY_WIN != null &&
+      !Number.isNaN(odds.HOME_WIN) &&
+      !Number.isNaN(odds.DRAW) &&
+      !Number.isNaN(odds.AWAY_WIN)
+        ? `Dados de odds 1X2 (referência): ${JSON.stringify(odds)}`
+        : 'Não há odds 1X2 disponíveis para este jogo na API; estime probabilidades com base em contexto geral do confronto (sem inventar odds numéricas).';
 
     const userPrompt = [
       'Você é um especialista em análise de futebol e apostas esportivas.',
@@ -243,7 +306,7 @@ export class PredictionService {
       '* Forma recente',
       '* Equilíbrio do confronto',
       '',
-      `Dados de odds 1X2 (referência): ${JSON.stringify(odds)}`,
+      oddsLine,
       '',
       'Responda SOMENTE em JSON no formato:',
       '',
@@ -353,11 +416,10 @@ export class PredictionService {
 
   private hasUsableOdds(m: ApiMatch): boolean {
     const o = this.football.getOddsMap(m);
-    return (
-      (o.HOME_WIN != null && !Number.isNaN(o.HOME_WIN)) ||
-      (o.DRAW != null && !Number.isNaN(o.DRAW)) ||
-      (o.AWAY_WIN != null && !Number.isNaN(o.AWAY_WIN))
-    );
+    const h = o.HOME_WIN != null && !Number.isNaN(o.HOME_WIN) && o.HOME_WIN > 0;
+    const d = o.DRAW != null && !Number.isNaN(o.DRAW) && o.DRAW > 0;
+    const a = o.AWAY_WIN != null && !Number.isNaN(o.AWAY_WIN) && o.AWAY_WIN > 0;
+    return h && d && a;
   }
 
   private pickOddForMarket(
@@ -368,6 +430,16 @@ export class PredictionService {
     const v = odds[market];
     if (v == null || Number.isNaN(v)) return null;
     return v;
+  }
+
+  /**
+   * Quando a API não devolve odd decimal 1X2 (plano free), usa uma odd "implícita"
+   * coerente com a probabilidade escolhida (ex.: IA), só para persistência/UI — não é odd real de casa.
+   */
+  private impliedDecimalOddFromProbability(p: number): number | null {
+    if (p == null || Number.isNaN(p) || p <= 0 || p >= 1) return null;
+    const implied = 1 / p;
+    return Math.min(50, Math.max(1.01, implied));
   }
 
   private applyFreeVsPaidTiers(

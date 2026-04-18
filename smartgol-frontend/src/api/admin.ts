@@ -7,6 +7,8 @@ export type AdminGeneratePredictionsResult = {
   candidates: number;
   skippedDuplicate: number;
   skippedNoOdds: number;
+  skippedNoOpenAi: number;
+  skippedAiFailed: number;
   skippedOddTooLow: number;
   skippedErrors: number;
   built: number;

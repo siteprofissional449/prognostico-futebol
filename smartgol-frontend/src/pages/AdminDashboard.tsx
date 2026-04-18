@@ -48,6 +48,7 @@ export function AdminDashboard() {
       const detail =
         `Data: ${r.date} · candidatos: ${r.candidates} · gravados: ${r.count} · ` +
         `motivo: ${r.reason} · dup: ${r.skippedDuplicate} · sem odds: ${r.skippedNoOdds} · ` +
+        `sem IA: ${r.skippedNoOpenAi} · IA falhou: ${r.skippedAiFailed} · ` +
         `odd baixa: ${r.skippedOddTooLow} · erros: ${r.skippedErrors} · ` +
         `montados: ${r.built} · pós-filtro: ${r.afterOddFilter}`;
       notifications.show({
