@@ -112,8 +112,13 @@ export class FootballService {
       return list.sort(
         (a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime(),
       );
-    } catch {
-      return this.getMockResults(targetDate);
+    } catch (e) {
+      this.logger.warn(
+        `Football-Data (highlights) falhou para ${targetDate}: ${
+          e instanceof Error ? e.message : e
+        }`,
+      );
+      return [];
     }
   }
 
@@ -180,8 +185,13 @@ export class FootballService {
         (a, b) =>
           new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime(),
       );
-    } catch {
-      return this.getMockResults(date) as unknown as ApiMatchResult[];
+    } catch (e) {
+      this.logger.warn(
+        `Football-Data (matches status=${status}) falhou para ${date}: ${
+          e instanceof Error ? e.message : e
+        }`,
+      );
+      return [];
     }
   }
 
@@ -305,12 +315,29 @@ export class FootballService {
         },
       );
       const matches = data.matches || [];
+      if (matches.length === 0) {
+        this.logger.warn(
+          `Football-Data devolveu 0 partidas para ${date} (intervalo UTC).`,
+        );
+        return [];
+      }
       const withOdds = await Promise.all(
         matches.slice(0, 120).map((m) => this.enrichWithOdds(m)),
       );
-      return withOdds.filter((m) => m.odds && m.odds.length > 0);
-    } catch {
-      return this.getMockMatches(date);
+      const filtered = withOdds.filter((m) => m.odds && m.odds.length > 0);
+      if (filtered.length === 0) {
+        this.logger.warn(
+          `Football-Data: ${matches.length} partida(s) em ${date}, mas nenhuma com odds carregáveis (plano/endpoint).`,
+        );
+      }
+      return filtered;
+    } catch (e) {
+      this.logger.warn(
+        `Football-Data (matches+odds) falhou para ${date}: ${
+          e instanceof Error ? e.message : e
+        }`,
+      );
+      return [];
     }
   }
 
