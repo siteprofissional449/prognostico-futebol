@@ -45,10 +45,15 @@ export function AdminDashboard() {
     try {
       const dateArg = genDate.trim() || undefined;
       const r = await adminGeneratePredictions(dateArg);
+      const detail =
+        `Data: ${r.date} · candidatos: ${r.candidates} · gravados: ${r.count} · ` +
+        `motivo: ${r.reason} · dup: ${r.skippedDuplicate} · sem odds: ${r.skippedNoOdds} · ` +
+        `odd baixa: ${r.skippedOddTooLow} · erros: ${r.skippedErrors} · ` +
+        `montados: ${r.built} · pós-filtro: ${r.afterOddFilter}`;
       notifications.show({
-        color: 'green',
+        color: r.count > 0 ? 'green' : 'yellow',
         title: 'Geração concluída',
-        message: `${r.count} palpite(s) gravado(s).`,
+        message: detail,
       });
       reloadStats();
     } catch (e) {

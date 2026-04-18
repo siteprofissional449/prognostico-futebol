@@ -1,6 +1,19 @@
 import { api } from './client';
 import type { AdminStats, AdminUserRow, PlanType } from '../types';
 
+export type AdminGeneratePredictionsResult = {
+  count: number;
+  date: string;
+  candidates: number;
+  skippedDuplicate: number;
+  skippedNoOdds: number;
+  skippedOddTooLow: number;
+  skippedErrors: number;
+  built: number;
+  afterOddFilter: number;
+  reason: string;
+};
+
 export function getAdminStats() {
   return api<AdminStats>('/admin/stats');
 }
@@ -22,7 +35,7 @@ export function patchAdminUser(
 /** Gera prognósticos (IA + API futebol). Requer JWT de administrador. */
 export function adminGeneratePredictions(date?: string) {
   const q = date?.trim() ? `?date=${encodeURIComponent(date.trim())}` : '';
-  return api<{ count: number }>(`/predictions/generate-today${q}`);
+  return api<AdminGeneratePredictionsResult>(`/predictions/generate-today${q}`);
 }
 
 /** Remove prognósticos automáticos de uma data. Requer JWT de administrador. */

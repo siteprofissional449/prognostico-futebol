@@ -15,7 +15,8 @@ import { Prediction, PlanType } from './prediction.entity';
 
 export type PredictionMarket = 'HOME_WIN' | 'DRAW' | 'AWAY_WIN';
 
-const MIN_ODD_THRESHOLD = 1.6;
+/** Odd mínima para gravar palpite (evita mercados ridiculamente baixos). */
+const MIN_ODD_THRESHOLD = 1.05;
 const FREE_TIER_MAX_GAMES = 5;
 
 interface AiJsonPayload {
@@ -34,6 +35,19 @@ interface PredictionCore {
   market: PredictionMarket;
   analysis: string;
 }
+
+export type GenerateDailyPredictionsResult = {
+  count: number;
+  date: string;
+  candidates: number;
+  skippedDuplicate: number;
+  skippedNoOdds: number;
+  skippedOddTooLow: number;
+  skippedErrors: number;
+  built: number;
+  afterOddFilter: number;
+  reason: string;
+};
 
 @Injectable()
 export class PredictionService {
@@ -56,7 +70,9 @@ export class PredictionService {
   /**
    * Busca jogos futuros do dia, gera palpite por jogo (IA ou odds), evita duplicados e persiste.
    */
-  async generateDailyPredictions(date?: string): Promise<{ count: number }> {
+  async generateDailyPredictions(
+    date?: string,
+  ): Promise<GenerateDailyPredictionsResult> {
     const targetDate = date ?? this.predictionsService.today();
     this.logger.log(`Iniciando geração de prognósticos para ${targetDate}`);
 
@@ -64,20 +80,37 @@ export class PredictionService {
     if (!matches.length) {
       this.logger.warn(`Nenhum jogo SCHEDULED/TIMED com odds para ${targetDate}.`);
       await this.recordGenerationMeta(0);
-      return { count: 0 };
+      return {
+        count: 0,
+        date: targetDate,
+        candidates: 0,
+        skippedDuplicate: 0,
+        skippedNoOdds: 0,
+        skippedOddTooLow: 0,
+        skippedErrors: 0,
+        built: 0,
+        afterOddFilter: 0,
+        reason: 'SEM_JOGOS_COM_ODDS',
+      };
     }
 
     const pending: Partial<Prediction>[] = [];
+    let skippedDuplicate = 0;
+    let skippedNoOdds = 0;
+    let skippedOddTooLow = 0;
+    let skippedErrors = 0;
 
     for (const m of matches) {
       const mid = String(m.id);
       try {
         if (await this.predictionsService.existsForMatchOnDate(mid, targetDate)) {
           this.logger.debug(`Jogo ${mid}: prognóstico já existe; ignorado.`);
+          skippedDuplicate += 1;
           continue;
         }
         if (!this.hasUsableOdds(m)) {
           this.logger.warn(`Jogo ${mid}: odds 1X2 insuficientes; ignorado.`);
+          skippedNoOdds += 1;
           continue;
         }
 
@@ -100,6 +133,7 @@ export class PredictionService {
           this.logger.warn(
             `Jogo ${mid}: odd inválida (${odd}) para ${core.market}; ignorado.`,
           );
+          skippedOddTooLow += 1;
           continue;
         }
 
@@ -128,6 +162,7 @@ export class PredictionService {
           predictionDate: targetDate,
         });
       } catch (e) {
+        skippedErrors += 1;
         this.logger.error(
           `Erro ao processar jogo ${mid}: ${e instanceof Error ? e.message : e}`,
         );
@@ -151,7 +186,38 @@ export class PredictionService {
     this.logger.log(
       `Geração concluída para ${targetDate}: ${saved.length} novo(s) prognóstico(s).`,
     );
-    return { count: saved.length };
+
+    let reason: string;
+    if (saved.length > 0) {
+      reason = 'OK';
+    } else if (pending.length === 0) {
+      if (skippedDuplicate >= matches.length) {
+        reason = 'TODOS_DUPLICADOS';
+      } else if (skippedNoOdds >= matches.length) {
+        reason = 'SEM_ODDS_1X2';
+      } else if (skippedErrors > 0) {
+        reason = 'ERROS_PROCESSAMENTO';
+      } else {
+        reason = 'SEM_CANDIDATOS_VALIDOS';
+      }
+    } else if (tiered.length === 0) {
+      reason = 'FILTRO_ODD_MINIMA';
+    } else {
+      reason = 'DESCONHECIDO';
+    }
+
+    return {
+      count: saved.length,
+      date: targetDate,
+      candidates: matches.length,
+      skippedDuplicate,
+      skippedNoOdds,
+      skippedOddTooLow,
+      skippedErrors,
+      built: pending.length,
+      afterOddFilter: tiered.length,
+      reason,
+    };
   }
 
   /**
