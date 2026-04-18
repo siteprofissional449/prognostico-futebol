@@ -98,13 +98,12 @@ export class FootballService {
       return this.getMockResults(targetDate);
     }
     try {
-      const from = `${targetDate}T00:00:00Z`;
-      const to = `${targetDate}T23:59:59Z`;
       const comps = this.topLeagueIds.join(',');
+      /** v4: `date` é yyyy-MM-dd; dateFrom/dateTo com o mesmo dia podem devolver lista vazia (dateTo exclusivo). */
       const { data } = await axios.get<{ matches?: ApiMatchResult[] }>(
         `${this.baseUrl}/matches`,
         {
-          params: { dateFrom: from, dateTo: to, competitions: comps },
+          params: { date: targetDate, competitions: comps },
           headers: { 'X-Auth-Token': this.apiKey },
         },
       );
@@ -171,12 +170,10 @@ export class FootballService {
   ): Promise<ApiMatchResult[]> {
     if (!this.apiKey) return [];
     try {
-      const from = `${date}T00:00:00Z`;
-      const to = `${date}T23:59:59Z`;
       const { data } = await axios.get<{ matches?: ApiMatchResult[] }>(
         `${this.baseUrl}/matches`,
         {
-          params: { dateFrom: from, dateTo: to, status },
+          params: { date, status },
           headers: { 'X-Auth-Token': this.apiKey },
         },
       );
@@ -305,19 +302,18 @@ export class FootballService {
       return this.getMockMatches(date);
     }
     try {
-      const from = `${date}T00:00:00Z`;
-      const to = `${date}T23:59:59Z`;
+      const comps = this.topLeagueIds.join(',');
       const { data } = await axios.get<{ matches?: ApiMatch[] }>(
         `${this.baseUrl}/matches`,
         {
-          params: { dateFrom: from, dateTo: to },
+          params: { date, competitions: comps },
           headers: { 'X-Auth-Token': this.apiKey },
         },
       );
       const matches = data.matches || [];
       if (matches.length === 0) {
         this.logger.warn(
-          `Football-Data devolveu 0 partidas para ${date} (intervalo UTC).`,
+          `Football-Data devolveu 0 partidas para date=${date} (ligas principais; plano free costuma exigir este filtro).`,
         );
         return [];
       }

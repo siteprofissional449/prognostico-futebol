@@ -75,7 +75,11 @@ export class PredictionService {
   async generateDailyPredictions(
     date?: string,
   ): Promise<GenerateDailyPredictionsResult> {
-    const targetDate = date ?? this.predictionsService.today();
+    const trimmed = date?.trim();
+    const tz = this.config.get<string>('CRON_TZ') || 'America/Sao_Paulo';
+    const targetDate =
+      trimmed ||
+      new Date().toLocaleDateString('sv-SE', { timeZone: tz });
     this.logger.log(`Iniciando geração de prognósticos para ${targetDate}`);
 
     const matches = await this.football.getUpcomingMatchesForDate(targetDate);

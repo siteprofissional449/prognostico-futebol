@@ -128,7 +128,8 @@ export function AdminDashboard() {
           Geração automática (IA + API futebol)
         </Text>
         <Text size="sm" c="dimmed" mb="md">
-          O mesmo fluxo do cron. Deixe a data vazia para o dia de hoje ({todayISO()} UTC). Só administradores.
+          O mesmo fluxo do cron. Deixe a data vazia para o dia corrente no servidor (mesma lógica do CRON_TZ no
+          Railway). Só administradores.
         </Text>
         <Group align="flex-end" wrap="wrap">
           <TextInput
