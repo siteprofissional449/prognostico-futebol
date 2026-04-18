@@ -7,6 +7,13 @@ import { PredictionsService } from '../predictions/predictions.service';
 import { GenerationMeta } from './generation-meta.entity';
 
 /** Partida com odds (football-data.org v4) — usada também na geração de prognósticos */
+/** Odds compactas no próprio recurso Match (v4). */
+export type ApiMatchOddsCompact = {
+  homeWin?: number;
+  draw?: number;
+  awayWin?: number;
+};
+
 export interface ApiMatch {
   id: number;
   homeTeam: { name: string };
@@ -14,10 +21,12 @@ export interface ApiMatch {
   competition: { name: string };
   utcDate: string;
   status?: string;
-  odds?: Array<{
-    market: string;
-    outcomes: Array<{ name: string; odds: string }>;
-  }>;
+  odds?:
+    | Array<{
+        market: string;
+        outcomes: Array<{ name: string; odds: string }>;
+      }>
+    | ApiMatchOddsCompact;
 }
 
 /** Partida com placar (resultado) - estrutura football-data.org v4 */
@@ -320,7 +329,7 @@ export class FootballService {
       const withOdds = await Promise.all(
         matches.slice(0, 120).map((m) => this.enrichWithOdds(m)),
       );
-      const withLoadedOdds = withOdds.filter((m) => m.odds && m.odds.length > 0);
+      const withLoadedOdds = withOdds.filter((m) => this.hasOddsPayload(m.odds));
       if (withLoadedOdds.length === 0 && matches.length > 0) {
         this.logger.warn(
           `Football-Data: ${matches.length} partida(s) em ${date}, mas odds não carregaram (muito comum no plano free: endpoint /matches/{id}/odds). ` +
@@ -339,13 +348,26 @@ export class FootballService {
     }
   }
 
+  /** Odds no payload da listagem: array de mercados ou objeto { homeWin, draw, awayWin } (v4). */
+  private hasOddsPayload(odds: ApiMatch['odds'] | undefined): boolean {
+    if (!odds) return false;
+    if (Array.isArray(odds)) return odds.length > 0;
+    const o = odds as ApiMatchOddsCompact;
+    return [o.homeWin, o.draw, o.awayWin].some(
+      (v) => v != null && !Number.isNaN(Number(v)) && Number(v) > 0,
+    );
+  }
+
   private async enrichWithOdds(match: ApiMatch): Promise<ApiMatch> {
     try {
       const { data } = await axios.get<{ odds?: ApiMatch['odds'] }>(
         `${this.baseUrl}/matches/${match.id}/odds`,
         { headers: { 'X-Auth-Token': this.apiKey } },
       );
-      return { ...match, odds: data.odds || [] };
+      const incoming = data.odds;
+      if (incoming == null) return match;
+      if (Array.isArray(incoming) && incoming.length === 0) return match;
+      return { ...match, odds: incoming };
     } catch {
       return match;
     }
@@ -485,10 +507,26 @@ export class FootballService {
   }
 
   private extractOddsMap(match: ApiMatch): Record<string, number | null> {
-    const outcomes = match.odds?.flatMap((o) => o.outcomes) || [];
-    const home = outcomes.find((o) => o.name === 'Home');
-    const draw = outcomes.find((o) => o.name === 'Draw');
-    const away = outcomes.find((o) => o.name === 'Away');
+    const raw = match.odds as unknown;
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+      const o = raw as Record<string, unknown>;
+      const n = (v: unknown): number | null => {
+        const x = typeof v === 'number' ? v : Number(v);
+        return x != null && !Number.isNaN(x) && x > 0 ? x : null;
+      };
+      return {
+        HOME_WIN: n(o.homeWin ?? o.home_win),
+        DRAW: n(o.draw),
+        AWAY_WIN: n(o.awayWin ?? o.away_win),
+      };
+    }
+    const arr = Array.isArray(raw) ? raw : [];
+    const outcomes = arr.flatMap((x) =>
+      x && Array.isArray(x.outcomes) ? x.outcomes : [],
+    );
+    const home = outcomes.find((x) => x.name === 'Home');
+    const draw = outcomes.find((x) => x.name === 'Draw');
+    const away = outcomes.find((x) => x.name === 'Away');
     return {
       HOME_WIN: home ? parseFloat(home.odds) : null,
       DRAW: draw ? parseFloat(draw.odds) : null,

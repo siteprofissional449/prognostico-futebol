@@ -200,9 +200,9 @@ export class PredictionService {
 
         pending.push({
           matchId: mid,
-          homeTeam: m.homeTeam.name,
-          awayTeam: m.awayTeam.name,
-          league: m.competition.name,
+          homeTeam: m.homeTeam?.name ?? '—',
+          awayTeam: m.awayTeam?.name ?? '—',
+          league: m.competition?.name ?? '—',
           startTime: new Date(m.utcDate),
           market: core.market,
           probability,
