@@ -107,6 +107,9 @@ export class UsersService {
     if (!user) {
       return this.getPublicAccessContext();
     }
+    if (user.isAdmin) {
+      return this.getAdminFullAccessContext();
+    }
     const plan = this.normalizePlanCode(user.currentPlan?.code);
     const active = this.isUserPremium(user);
     const effectivePlan = active ? plan : PlanType.FREE;
@@ -129,6 +132,21 @@ export class UsersService {
       isPremium: false,
       canAccessHistory: false,
       canAccessPastResults: false,
+    };
+  }
+
+  /**
+   * Administradores acedem a tudo o que um assinante de topo acede (prognósticos completos,
+   * datas, histórico), independentemente do plano pago na ficha.
+   */
+  private getAdminFullAccessContext(): UserAccessContext {
+    return {
+      plan: PlanType.MONTHLY,
+      userAccessTier: PLAN_TIER[PlanType.MONTHLY],
+      expiresAt: null,
+      isPremium: true,
+      canAccessHistory: true,
+      canAccessPastResults: true,
     };
   }
 
