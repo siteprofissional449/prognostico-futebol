@@ -31,8 +31,8 @@ export class PredictionsController {
 
   /** Teaser da home: top 3 jogos por confiança / odd (sempre desbloqueados). */
   @Get('home')
-  async listHome() {
-    return this.predictionsService.listHomeTeasers();
+  async listHome(@Query('date') date?: string) {
+    return this.predictionsService.listHomeTeasers(date);
   }
 
   /**

@@ -277,6 +277,39 @@ export function Home() {
         </Group>
       </Group>
 
+      <Paper withBorder p="lg" radius="md" mb="lg">
+        <Group justify="space-between" align="flex-start" wrap="wrap" mb="md">
+          <div>
+            <Title order={3} mb={6}>
+              Prognósticos do dia
+            </Title>
+            <Text size="sm" c="dimmed">
+              Os 3 melhores palpites para {formatDateLabel(date)}, com um resumo curto de cada jogo.{' '}
+              <Link to="/prognosticos" style={{ color: 'var(--mantine-color-green-4)' }}>
+                Ver todos os prognósticos
+              </Link>
+              .
+            </Text>
+          </div>
+        </Group>
+        {predictionsError && (
+          <Alert color="red" mb="md">{predictionsError}</Alert>
+        )}
+        {predictionsLoading ? (
+          <Loader size="lg" />
+        ) : predictionsCur.length === 0 ? (
+          <Text size="sm" c="dimmed">
+            Nenhum palpite disponível para esta data.
+          </Text>
+        ) : (
+          <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md">
+            {predictionsCur.slice(0, 3).map((p) => (
+              <GameCard key={p.id} p={p} />
+            ))}
+          </SimpleGrid>
+        )}
+      </Paper>
+
       <Tabs defaultValue="jogos">
         <Tabs.List mb="lg">
           <Tabs.Tab value="jogos" leftSection={<IconCalendarEvent size={16} />}>
@@ -342,9 +375,10 @@ export function Home() {
 
         <Tabs.Panel value="palpites">
           <Text size="sm" c="dimmed" mb="md">
-            Até 3 melhores palpites do dia (teaser). Para ver todos os disponíveis no seu plano, use{' '}
+            Os mesmos palpites do bloco <Text span fw={600}>Prognósticos do dia</Text> (até 3). Resumo curto em cada
+            card. Lista completa:{' '}
             <Link to="/prognosticos" style={{ color: 'var(--mantine-color-green-4)' }}>
-              Palpites
+              Prognósticos
             </Link>
             .
           </Text>

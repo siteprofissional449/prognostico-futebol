@@ -37,6 +37,14 @@ function marketLabel(market: string) {
   return market;
 }
 
+/** Resumo curto para a UI (uma frase). */
+function briefAnalysis(text: string | null | undefined, max = 150): string | null {
+  if (!text?.trim()) return null;
+  const t = text.trim().replace(/\s+/g, ' ');
+  if (t.length <= max) return t;
+  return `${t.slice(0, max - 1).trim()}…`;
+}
+
 export function GameCard({ p }: { p: PredictionView }) {
   const prob =
     p.probability == null
@@ -46,6 +54,7 @@ export function GameCard({ p }: { p: PredictionView }) {
         : p.probability;
   const odd =
     p.odd == null ? 0 : typeof p.odd === 'string' ? parseFloat(p.odd) : p.odd;
+  const blurb = briefAnalysis(p.analysis);
 
   return (
     <Card className={classes.card} shadow="sm" padding="lg" radius="md" withBorder>
@@ -58,6 +67,11 @@ export function GameCard({ p }: { p: PredictionView }) {
       <Text fw={600} size="lg" mb="xs" className={classes.match}>
         {p.homeTeam} × {p.awayTeam}
       </Text>
+      {blurb && (
+        <Text size="sm" c="dimmed" mt={4} mb="sm" style={{ lineHeight: 1.45 }}>
+          {blurb}
+        </Text>
+      )}
       <Group justify="space-between" mt="md">
         <div>
           <Text size="xs" c="dimmed">Horário</Text>

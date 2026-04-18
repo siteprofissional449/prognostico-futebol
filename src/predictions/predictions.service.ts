@@ -196,8 +196,8 @@ export class PredictionsService {
     return body;
   }
 
-  async listHomeTeasers(): Promise<PredictionsListResponseDto> {
-    const targetDate = this.today();
+  async listHomeTeasers(date?: string): Promise<PredictionsListResponseDto> {
+    const targetDate = this.normalizeDate(date);
     const ranked = await this.findRankedForDate(targetDate);
     const slice = ranked.slice(0, HOME_PREDICTION_TEASERS);
     const freeAccess: UserAccessContext = {

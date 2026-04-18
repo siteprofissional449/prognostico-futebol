@@ -101,7 +101,8 @@ export function Prognosticos() {
           <Title order={2}>Prognósticos</Title>
           <Text c="dimmed" size="sm">
             Até {meta?.freeSlotCount ?? 5} palpites completos no plano gratuito (melhores do dia); os
-            demais ficam bloqueados para incentivar o upgrade.
+            demais ficam bloqueados para incentivar o upgrade. Em cada jogo aberto aparece um{' '}
+            <Text span fw={600}>resumo curto</Text> da análise (poucas palavras).
           </Text>
         </div>
         <Button component={Link} to="/planos" variant="light" color="violet">
