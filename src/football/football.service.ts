@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -64,6 +64,7 @@ export class FootballService {
 
   constructor(
     private readonly config: ConfigService,
+    @Inject(forwardRef(() => PredictionsService))
     private readonly predictionsService: PredictionsService,
     @InjectRepository(GenerationMeta)
     private readonly generationMetaRepo: Repository<GenerationMeta>,
