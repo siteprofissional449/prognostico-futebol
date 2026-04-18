@@ -7,7 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import axios from 'axios';
+import axios, { isAxiosError } from 'axios';
 import { FootballService, ApiMatch } from '../football/football.service';
 import { GenerationMeta } from '../football/generation-meta.entity';
 import { PredictionsService } from './predictions.service';
@@ -49,6 +49,8 @@ export type GenerateDailyPredictionsResult = {
   built: number;
   afterOddFilter: number;
   reason: string;
+  /** Primeira mensagem de falha da OpenAI (útil no admin sem abrir logs). */
+  aiErrorSample: string | null;
 };
 
 @Injectable()
@@ -101,6 +103,7 @@ export class PredictionService {
         built: 0,
         afterOddFilter: 0,
         reason: 'SEM_PARTIDAS_CANDIDATAS',
+        aiErrorSample: null,
       };
     }
 
@@ -111,6 +114,7 @@ export class PredictionService {
     let skippedAiFailed = 0;
     let skippedOddTooLow = 0;
     let skippedErrors = 0;
+    let aiErrorSample: string | null = null;
 
     for (const m of matches) {
       const mid = String(m.id);
@@ -150,10 +154,10 @@ export class PredictionService {
           try {
             core = await this.buildPredictionsWithAi(m);
           } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            if (!aiErrorSample) aiErrorSample = msg.slice(0, 280);
             this.logger.warn(
-              `IA falhou para jogo ${mid} sem odds 1X2 (${
-                e instanceof Error ? e.message : e
-              }); ignorado.`,
+              `IA falhou para jogo ${mid} sem odds 1X2 (${msg}); ignorado.`,
             );
             skippedAiFailed += 1;
             continue;
@@ -275,6 +279,7 @@ export class PredictionService {
       built: pending.length,
       afterOddFilter: tiered.length,
       reason,
+      aiErrorSample,
     };
   }
 
@@ -286,8 +291,8 @@ export class PredictionService {
       return this.buildPredictionsFromOdds(match);
     }
 
-    const timeA = match.homeTeam.name;
-    const timeB = match.awayTeam.name;
+    const timeA = match.homeTeam?.name ?? 'Mandante';
+    const timeB = match.awayTeam?.name ?? 'Visitante';
     const odds = this.football.getOddsMap(match);
     const oddsLine =
       odds.HOME_WIN != null &&
@@ -328,30 +333,44 @@ export class PredictionService {
       'analysis: português do Brasil, até 3 frases.',
     ].join('\n');
 
-    const { data } = await axios.post(
-      'https://api.openai.com/v1/chat/completions',
-      {
-        model: this.openAiModel,
-        temperature: 0.25,
-        response_format: { type: 'json_object' },
-        messages: [{ role: 'user', content: userPrompt }],
-      },
-      {
-        timeout: 30000,
-        headers: {
-          Authorization: `Bearer ${this.openAiKey}`,
-          'Content-Type': 'application/json',
-        },
-      },
-    );
+    const url = 'https://api.openai.com/v1/chat/completions';
+    const headers = {
+      Authorization: `Bearer ${this.openAiKey}`,
+      'Content-Type': 'application/json',
+    };
+    const baseBody = {
+      model: this.openAiModel,
+      temperature: 0.25,
+      messages: [{ role: 'user', content: userPrompt }],
+    };
 
-    const content = data?.choices?.[0]?.message?.content as string | undefined;
-    const parsed = this.parseAiJson(content);
-    const market = this.normalizeBestBet(parsed.best_bet);
-    if (!market) {
-      throw new Error('Resposta IA sem best_bet válido');
+    let data: {
+      choices?: Array<{ message?: { content?: string } }>;
+    };
+    try {
+      const res = await axios.post(
+        url,
+        { ...baseBody, response_format: { type: 'json_object' as const } },
+        { timeout: 45000, headers },
+      );
+      data = res.data;
+    } catch (first) {
+      if (isAxiosError(first) && first.response?.status === 400) {
+        this.logger.warn(
+          `OpenAI rejeitou json_mode; nova tentativa sem response_format (${
+            (first.response?.data as { error?: { message?: string } })?.error
+              ?.message || first.message
+          }).`,
+        );
+        const res = await axios.post(url, baseBody, { timeout: 45000, headers });
+        data = res.data;
+      } else {
+        throw new Error(this.extractOpenAiErrorMessage(first));
+      }
     }
 
+    const content = data?.choices?.[0]?.message?.content as string | undefined;
+    const parsed = this.parseAiResponse(content);
     let probHome: number;
     let probDraw: number;
     let probAway: number;
@@ -367,6 +386,13 @@ export class PredictionService {
       );
     } else {
       throw new Error('Resposta IA incompleta (prob_*)');
+    }
+
+    let market =
+      this.normalizeBestBet(parsed.best_bet) ??
+      this.inferMarketFromProbs(probHome, probDraw, probAway);
+    if (!market) {
+      throw new Error('Resposta IA sem best_bet válido nem probabilidades utilizáveis');
     }
 
     const analysis =
@@ -404,12 +430,14 @@ export class PredictionService {
       best = probAway;
     }
 
+    const hn = match.homeTeam?.name ?? 'Mandante';
+    const an = match.awayTeam?.name ?? 'Visitante';
     const favLabel =
       market === 'HOME_WIN'
-        ? `vitória de ${match.homeTeam.name}`
+        ? `vitória de ${hn}`
         : market === 'DRAW'
           ? 'empate'
-          : `vitória de ${match.awayTeam.name}`;
+          : `vitória de ${an}`;
 
     const analysis =
       `Palpite automático por odds implícitas (normalizadas). ` +
@@ -471,13 +499,80 @@ export class PredictionService {
     }));
   }
 
-  private parseAiJson(content: string | undefined): AiJsonPayload {
-    if (!content) return {};
-    try {
-      return JSON.parse(content) as AiJsonPayload;
-    } catch {
-      return {};
+  private extractOpenAiErrorMessage(err: unknown): string {
+    if (isAxiosError(err)) {
+      const body = err.response?.data as
+        | { error?: { message?: string }; message?: string }
+        | undefined;
+      const m = body?.error?.message || body?.message || err.message;
+      return m || 'Erro HTTP na OpenAI';
     }
+    return err instanceof Error ? err.message : String(err);
+  }
+
+  /** Aceita JSON puro, ```json fences```, chaves camelCase e objeto aninhado. */
+  private parseAiResponse(content: string | undefined): AiJsonPayload {
+    if (!content?.trim()) return {};
+    let s = content.trim();
+    const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fence) s = fence[1].trim();
+    let obj: unknown;
+    try {
+      obj = JSON.parse(s);
+    } catch {
+      const i = s.indexOf('{');
+      const j = s.lastIndexOf('}');
+      if (i < 0 || j <= i) return {};
+      try {
+        obj = JSON.parse(s.slice(i, j + 1));
+      } catch {
+        return {};
+      }
+    }
+    if (!obj || typeof obj !== 'object') return {};
+    const r = obj as Record<string, unknown>;
+    const nest = r.prediction ?? r.result ?? r.data;
+    const src =
+      nest && typeof nest === 'object'
+        ? { ...r, ...(nest as Record<string, unknown>) }
+        : r;
+    const num = (v: unknown): number | undefined => {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : undefined;
+    };
+    const str = (v: unknown): string | undefined =>
+      typeof v === 'string' && v.trim() ? v.trim() : undefined;
+    return {
+      match: str(src.match),
+      prob_home_win:
+        num(src.prob_home_win) ??
+        num(src.probHomeWin) ??
+        num(src.home_win) ??
+        num(src.homeWin),
+      prob_draw:
+        num(src.prob_draw) ??
+        num(src.probDraw) ??
+        num(src.draw_prob),
+      prob_away_win:
+        num(src.prob_away_win) ??
+        num(src.probAwayWin) ??
+        num(src.away_win) ??
+        num(src.awayWin),
+      best_bet:
+        str(src.best_bet) ?? str(src.bestBet) ?? str(src.pick) ?? str(src.mercado),
+      analysis: str(src.analysis) ?? str(src.resumo) ?? str(src.summary),
+    };
+  }
+
+  private inferMarketFromProbs(
+    h: number,
+    d: number,
+    a: number,
+  ): PredictionMarket | null {
+    if (![h, d, a].every((x) => Number.isFinite(x))) return null;
+    if (h >= d && h >= a) return 'HOME_WIN';
+    if (d >= h && d >= a) return 'DRAW';
+    return 'AWAY_WIN';
   }
 
   private normalizeBestBet(raw: string | undefined): PredictionMarket | null {

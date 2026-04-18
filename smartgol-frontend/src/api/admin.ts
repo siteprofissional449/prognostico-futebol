@@ -14,6 +14,8 @@ export type AdminGeneratePredictionsResult = {
   built: number;
   afterOddFilter: number;
   reason: string;
+  /** Primeira mensagem de erro da OpenAI (quando IA falha em massa). */
+  aiErrorSample: string | null;
 };
 
 export function getAdminStats() {

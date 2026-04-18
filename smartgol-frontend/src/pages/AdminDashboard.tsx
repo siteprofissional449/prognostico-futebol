@@ -45,12 +45,16 @@ export function AdminDashboard() {
     try {
       const dateArg = genDate.trim() || undefined;
       const r = await adminGeneratePredictions(dateArg);
+      const sample =
+        r.aiErrorSample != null && r.aiErrorSample.trim() !== ''
+          ? ` · OpenAI: ${r.aiErrorSample.trim()}`
+          : '';
       const detail =
         `Data: ${r.date} · candidatos: ${r.candidates} · gravados: ${r.count} · ` +
         `motivo: ${r.reason} · dup: ${r.skippedDuplicate} · sem odds: ${r.skippedNoOdds} · ` +
         `sem IA: ${r.skippedNoOpenAi} · IA falhou: ${r.skippedAiFailed} · ` +
         `odd baixa: ${r.skippedOddTooLow} · erros: ${r.skippedErrors} · ` +
-        `montados: ${r.built} · pós-filtro: ${r.afterOddFilter}`;
+        `montados: ${r.built} · pós-filtro: ${r.afterOddFilter}${sample}`;
       notifications.show({
         color: r.count > 0 ? 'green' : 'yellow',
         title: 'Geração concluída',
