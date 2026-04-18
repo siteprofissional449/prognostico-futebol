@@ -24,3 +24,14 @@ export function adminGeneratePredictions(date?: string) {
   const q = date?.trim() ? `?date=${encodeURIComponent(date.trim())}` : '';
   return api<{ count: number }>(`/predictions/generate-today${q}`);
 }
+
+/** Remove prognósticos automáticos de uma data. Requer JWT de administrador. */
+export function adminClearPredictions(date: string, resetMeta: boolean) {
+  const params = new URLSearchParams();
+  params.set('date', date.trim());
+  if (resetMeta) params.set('resetMeta', 'true');
+  return api<{ deleted: number; date: string; resetMeta: boolean }>(
+    `/admin/predictions?${params.toString()}`,
+    { method: 'DELETE' },
+  );
+}

@@ -1,7 +1,19 @@
 import { useEffect, useState } from 'react';
-import { Button, Group, Paper, SimpleGrid, Text, TextInput, Title } from '@mantine/core';
-import { IconSparkles } from '@tabler/icons-react';
-import { adminGeneratePredictions, getAdminStats } from '../api/admin';
+import {
+  Button,
+  Checkbox,
+  Divider,
+  Group,
+  Modal,
+  Paper,
+  SimpleGrid,
+  Text,
+  TextInput,
+  Title,
+} from '@mantine/core';
+import { useDisclosure } from '@mantine/hooks';
+import { IconSparkles, IconTrash } from '@tabler/icons-react';
+import { adminClearPredictions, adminGeneratePredictions, getAdminStats } from '../api/admin';
 import { notifications } from '@mantine/notifications';
 
 function todayISO() {
@@ -12,6 +24,10 @@ export function AdminDashboard() {
   const [stats, setStats] = useState<{ userCount: number; predictionCount: number } | null>(null);
   const [genDate, setGenDate] = useState('');
   const [generating, setGenerating] = useState(false);
+  const [clearDate, setClearDate] = useState('');
+  const [resetMeta, setResetMeta] = useState(true);
+  const [clearing, setClearing] = useState(false);
+  const [confirmOpened, { open: openConfirm, close: closeConfirm }] = useDisclosure(false);
 
   useEffect(() => {
     getAdminStats()
@@ -34,6 +50,7 @@ export function AdminDashboard() {
         title: 'Geração concluída',
         message: `${r.count} palpite(s) gravado(s).`,
       });
+      reloadStats();
     } catch (e) {
       notifications.show({
         color: 'red',
@@ -42,6 +59,37 @@ export function AdminDashboard() {
       });
     } finally {
       setGenerating(false);
+    }
+  };
+
+  const reloadStats = () => {
+    getAdminStats()
+      .then(setStats)
+      .catch(() => {
+        /* já notificamos no mount; falha silenciosa aqui */
+      });
+  };
+
+  const runClear = async () => {
+    const d = (clearDate.trim() || todayISO()).trim();
+    setClearing(true);
+    try {
+      const r = await adminClearPredictions(d, resetMeta);
+      notifications.show({
+        color: 'green',
+        title: 'Limpeza concluída',
+        message: `Removidos ${r.deleted} palpite(s) de ${r.date}.`,
+      });
+      closeConfirm();
+      reloadStats();
+    } catch (e) {
+      notifications.show({
+        color: 'red',
+        title: 'Falha ao limpar',
+        message: e instanceof Error ? e.message : 'Erro desconhecido',
+      });
+    } finally {
+      setClearing(false);
     }
   };
 
@@ -93,6 +141,59 @@ export function AdminDashboard() {
           </Button>
         </Group>
       </Paper>
+
+      <Paper p="lg" radius="md" withBorder mt="xl">
+        <Text size="sm" c="dimmed" tt="uppercase" fw={600} mb="xs">
+          Limpar prognósticos (por dia)
+        </Text>
+        <Text size="sm" c="dimmed" mb="md">
+          Remove do banco todos os palpites automáticos da data (útil após testes/mock). Isto não apaga
+          prognósticos manuais do menu <Text span fw={600}>Admin → Prognósticos</Text>.
+        </Text>
+        <Group align="flex-end" wrap="wrap">
+          <TextInput
+            label="Data (YYYY-MM-DD)"
+            placeholder={todayISO()}
+            value={clearDate}
+            onChange={(e) => setClearDate(e.currentTarget.value)}
+            w={220}
+          />
+          <Checkbox
+            label="Repor registo da última geração"
+            checked={resetMeta}
+            onChange={(e) => setResetMeta(e.currentTarget.checked)}
+          />
+          <Button
+            color="red"
+            variant="light"
+            leftSection={<IconTrash size={18} />}
+            onClick={openConfirm}
+          >
+            Limpar dia
+          </Button>
+        </Group>
+      </Paper>
+
+      <Modal
+        opened={confirmOpened}
+        onClose={closeConfirm}
+        title="Confirmar limpeza"
+        centered
+      >
+        <Text size="sm" mb="md">
+          Tem a certeza que quer apagar <strong>todos</strong> os prognósticos automáticos do dia{' '}
+          <strong>{clearDate.trim() || todayISO()}</strong>?
+        </Text>
+        <Divider my="sm" />
+        <Group justify="flex-end">
+          <Button variant="default" onClick={closeConfirm} disabled={clearing}>
+            Cancelar
+          </Button>
+          <Button color="red" loading={clearing} onClick={runClear}>
+            Apagar
+          </Button>
+        </Group>
+      </Modal>
     </>
   );
 }

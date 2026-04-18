@@ -1,9 +1,11 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -36,5 +38,19 @@ export class AdminController {
     @Body() dto: AdminUpdateUserDto,
   ) {
     return this.adminService.updateUser(id, dto);
+  }
+
+  /** Apaga todos os prognósticos automáticos de uma data (YYYY-MM-DD). */
+  @Delete('predictions')
+  clearPredictions(
+    @Query('date') date: string,
+    @Query('resetMeta') resetMeta?: string,
+  ) {
+    const flag =
+      resetMeta === '1' ||
+      resetMeta === 'true' ||
+      resetMeta === 'yes' ||
+      resetMeta === 'on';
+    return this.adminService.clearPredictionsForDate(date, flag);
   }
 }
