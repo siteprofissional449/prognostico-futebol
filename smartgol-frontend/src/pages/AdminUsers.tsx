@@ -79,9 +79,12 @@ export function AdminUsers() {
         planCode,
       };
       if (planCode !== 'FREE') {
-        body.planExpiresAt = expiresInput.trim()
-          ? new Date(expiresInput + 'T23:59:59').toISOString()
-          : null;
+        if (expiresInput.trim()) {
+          body.planExpiresAt = new Date(
+            expiresInput + 'T23:59:59',
+          ).toISOString();
+        }
+        /** Sem data: não enviar o campo — o backend aplica o ciclo padrão (1d / 7d / 30d). */
       }
       await patchAdminUser(editUser.id, body);
       notifications.show({ color: 'green', message: 'Usuário atualizado.' });
@@ -169,7 +172,7 @@ export function AdminUsers() {
             <>
               <TextInput
                 label="Validade (opcional)"
-                description="Data em que o acesso pago expira (após isso volta para Grátis)."
+                description="Se deixar em branco, o servidor aplica o fim do ciclo (diário: fim do dia; semanal: +7 dias; mensal: +30 dias). Com data, expira nesse dia (23:59)."
                 type="date"
                 value={expiresInput}
                 onChange={(e) => setExpiresInput(e.currentTarget.value)}

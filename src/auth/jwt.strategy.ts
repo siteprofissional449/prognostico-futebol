@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
+import { UsersService } from '../users/users.service';
 
 export interface JwtPayload {
   sub: string;
@@ -11,9 +12,13 @@ export interface JwtPayload {
   isAdmin?: boolean;
 }
 
+/**
+ * Em cada pedido autenticado, o plano vem da **base de dados** (não só do JWT),
+ * para que alterações no admin (ou pagamento) tenham efeito sem novo login.
+ */
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor() {
+  constructor(private readonly usersService: UsersService) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
@@ -22,13 +27,18 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: JwtPayload) {
+    const user = await this.usersService.findById(payload.sub);
+    if (!user) {
+      throw new UnauthorizedException();
+    }
+    const access = await this.usersService.getUserAccessContext(payload.sub);
     return {
       userId: payload.sub,
-      email: payload.email,
-      plan: payload.plan,
-      userAccessTier: payload.userAccessTier ?? 0,
-      expiresAt: payload.expiresAt ?? null,
-      isAdmin: !!payload.isAdmin,
+      email: user.email,
+      plan: access.plan,
+      userAccessTier: access.userAccessTier,
+      expiresAt: access.expiresAt,
+      isAdmin: !!user.isAdmin,
     };
   }
 }

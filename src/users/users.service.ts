@@ -193,10 +193,13 @@ export class UsersService {
       });
       if (!plan) throw new NotFoundException('Plano inválido');
       user.currentPlanId = plan.id;
-      if (dto.planExpiresAt !== undefined) {
-        user.planExpiresAt = dto.planExpiresAt
-          ? new Date(dto.planExpiresAt)
-          : null;
+      const hasCustomExpiry =
+        dto.planExpiresAt != null && String(dto.planExpiresAt).trim() !== '';
+      if (hasCustomExpiry) {
+        user.planExpiresAt = new Date(dto.planExpiresAt as string);
+      } else {
+        /** Sem data = mesmo comportamento do pagamento: ciclo padrão a partir de agora. */
+        user.planExpiresAt = this.calculateExpiration(normalizedCode, new Date());
       }
     } else if (dto.planExpiresAt !== undefined) {
       user.planExpiresAt = dto.planExpiresAt
