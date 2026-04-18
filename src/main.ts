@@ -1,7 +1,14 @@
+import { webcrypto } from 'node:crypto';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { PlansService } from './plans/plans.service';
 import { UsersService } from './users/users.service';
+
+/** @nestjs/schedule v6 usa `crypto.randomUUID()` — em alguns runtimes Node o global não existe. */
+const g = globalThis as { crypto?: unknown };
+if (!g.crypto) {
+  (g as { crypto: typeof webcrypto }).crypto = webcrypto;
+}
 
 /** Origens permitidas no browser (Vercel). Várias URLs separadas por vírgula. Sem variável: reflete o Origin do pedido (útil em dev / previews). */
 function corsOrigin(): true | string | string[] {
