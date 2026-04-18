@@ -173,6 +173,66 @@ export class FootballService {
     return this.extractOddsMap(match);
   }
 
+  /**
+   * 1X2 + totais 2.5 gols + cantos (quando a API devolve mercados com outcomes).
+   * Chaves: HOME_WIN, DRAW, AWAY_WIN, OVER_25, UNDER_25, CORNERS_OVER, CORNERS_UNDER.
+   */
+  getExtendedOddsMap(match: ApiMatch): Record<string, number | null> {
+    const base = this.extractOddsMap(match);
+    const out: Record<string, number | null> = {
+      HOME_WIN: base.HOME_WIN,
+      DRAW: base.DRAW,
+      AWAY_WIN: base.AWAY_WIN,
+      OVER_25: null,
+      UNDER_25: null,
+      CORNERS_OVER: null,
+      CORNERS_UNDER: null,
+    };
+    const raw = match.odds;
+    if (!raw || typeof raw !== 'object' || !Array.isArray(raw)) return out;
+    for (const book of raw) {
+      const mk = String((book as { market?: string }).market || '').toUpperCase();
+      const outs =
+        (book as { outcomes?: Array<{ name: string; odds: string }> }).outcomes ||
+        [];
+      for (const o of outs) {
+        const label = (o.name || '').replace(/\s+/g, ' ').trim();
+        const price = parseFloat(String(o.odds).replace(',', '.'));
+        if (!Number.isFinite(price) || price < 1.01) continue;
+        const u = label.toUpperCase();
+        if (
+          (u.includes('OVER') && (u.includes('2.5') || u.includes('2,5'))) ||
+          u === 'O2.5'
+        ) {
+          out.OVER_25 =
+            out.OVER_25 == null ? price : Math.max(out.OVER_25, price);
+        }
+        if (
+          (u.includes('UNDER') && (u.includes('2.5') || u.includes('2,5'))) ||
+          u === 'U2.5'
+        ) {
+          out.UNDER_25 =
+            out.UNDER_25 == null ? price : Math.max(out.UNDER_25, price);
+        }
+        if (mk.includes('CORNER') || u.includes('CORNER')) {
+          if (u.includes('OVER')) {
+            out.CORNERS_OVER =
+              out.CORNERS_OVER == null
+                ? price
+                : Math.max(out.CORNERS_OVER, price);
+          }
+          if (u.includes('UNDER')) {
+            out.CORNERS_UNDER =
+              out.CORNERS_UNDER == null
+                ? price
+                : Math.max(out.CORNERS_UNDER, price);
+          }
+        }
+      }
+    }
+    return out;
+  }
+
   private async fetchMatchesByStatus(
     date: string,
     status: string,

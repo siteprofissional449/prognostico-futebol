@@ -121,7 +121,12 @@ export class PredictionsService {
         dto.resultStatus = 'PENDING';
       } else {
         dto.finalScore = `${result.homeScore}x${result.awayScore}`;
-        dto.resultStatus = this.computeResultStatus(dto.market, result.winner);
+        const totalGoals = result.homeScore + result.awayScore;
+        dto.resultStatus = this.computeResultStatus(
+          dto.market,
+          result.winner,
+          totalGoals,
+        );
       }
     }
 
@@ -131,8 +136,23 @@ export class PredictionsService {
   private computeResultStatus(
     market: string | null,
     winner: MatchResultDto['winner'],
+    totalGoals: number,
   ): 'GREEN' | 'RED' | 'PENDING' {
     if (!market) return 'PENDING';
+    if (market === 'OVER_25') {
+      if (!Number.isFinite(totalGoals)) return 'PENDING';
+      return totalGoals > 2 ? 'GREEN' : 'RED';
+    }
+    if (market === 'UNDER_25') {
+      if (!Number.isFinite(totalGoals)) return 'PENDING';
+      return totalGoals < 3 ? 'GREEN' : 'RED';
+    }
+    if (market === 'CORNERS_OVER' || market === 'CORNERS_UNDER') {
+      return 'PENDING';
+    }
+    if (market !== 'HOME_WIN' && market !== 'AWAY_WIN' && market !== 'DRAW') {
+      return 'PENDING';
+    }
     const predicted =
       market === 'HOME_WIN' ? 'HOME' : market === 'AWAY_WIN' ? 'AWAY' : 'DRAW';
     return predicted === winner ? 'GREEN' : 'RED';
