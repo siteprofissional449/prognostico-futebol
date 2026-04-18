@@ -1,7 +1,14 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Title, Text, SimpleGrid, Loader, Alert, Tabs, Group, Button, Paper, ThemeIcon } from '@mantine/core';
-import { IconCalendarEvent, IconTrophy, IconChartBar, IconChevronLeft, IconChevronRight, IconClock } from '@tabler/icons-react';
+import {
+  IconCalendarEvent,
+  IconChartBar,
+  IconChevronLeft,
+  IconChevronRight,
+  IconClock,
+  IconChartDots,
+} from '@tabler/icons-react';
 import { getHomePredictions } from '../api/predictions';
 import { getResultsOfDay, getTopLeaguesMatches, getMatchDetail, getGenerationInfo } from '../api/football';
 import { useAuth } from '../contexts/AuthContext';
@@ -278,39 +285,37 @@ export function Home() {
           <Tabs.Tab value="resultados" leftSection={<IconChartBar size={16} />}>
             Resultados
           </Tabs.Tab>
-          <Tabs.Tab value="destaques" leftSection={<IconTrophy size={16} />}>
-            Destaques
+          <Tabs.Tab value="palpites" leftSection={<IconChartDots size={16} />}>
+            Palpites
           </Tabs.Tab>
         </Tabs.List>
 
         <Tabs.Panel value="jogos">
           <Text size="sm" c="dimmed" mb="md">
-            Veja os melhores jogos de hoje. Para a lista completa de palpites, acesse{' '}
+            Partidas reais do calendário (principais ligas) para a data selecionada. Os palpites ficam no separador{' '}
+            <Text span fw={600}>Palpites</Text> ou em{' '}
             <Link to="/prognosticos" style={{ color: 'var(--mantine-color-green-4)' }}>
-              Palpites
+              Palpites (lista completa)
             </Link>
             .
           </Text>
-          {predictionsError && (
-            <Alert color="red" mb="md">{predictionsError}</Alert>
+          {highlightsError && (
+            <Alert color="red" mb="md">{highlightsError}</Alert>
           )}
-          {predictionsLoading ? (
+          {highlightsLoading ? (
             <Loader size="lg" />
+          ) : highlights.length === 0 ? (
+            <Text c="dimmed">Nenhum jogo das principais ligas nesta data (ou a API externa não devolveu dados).</Text>
           ) : (
-            <div>
-              <Title order={4} mb="xs">Hoje — {formatDateLabel(date)}</Title>
-              {predictionsCur.length === 0 ? (
-                <Text size="sm" c="dimmed">
-                  Nenhum jogo com palpite disponível para esta data.
-                </Text>
-              ) : (
-                <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md">
-                  {predictionsCur.map((p) => (
-                    <GameCard key={p.id} p={p} />
-                  ))}
-                </SimpleGrid>
-              )}
-            </div>
+            <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md">
+              {highlights.map((r) => (
+                <ResultCard
+                  key={r.id}
+                  match={r}
+                  onClick={() => openMatchDetail(r.id)}
+                />
+              ))}
+            </SimpleGrid>
           )}
         </Tabs.Panel>
 
@@ -335,24 +340,34 @@ export function Home() {
           )}
         </Tabs.Panel>
 
-        <Tabs.Panel value="destaques">
-          {highlightsError && (
-            <Alert color="red" mb="md">{highlightsError}</Alert>
+        <Tabs.Panel value="palpites">
+          <Text size="sm" c="dimmed" mb="md">
+            Até 3 melhores palpites do dia (teaser). Para ver todos os disponíveis no seu plano, use{' '}
+            <Link to="/prognosticos" style={{ color: 'var(--mantine-color-green-4)' }}>
+              Palpites
+            </Link>
+            .
+          </Text>
+          {predictionsError && (
+            <Alert color="red" mb="md">{predictionsError}</Alert>
           )}
-          {highlightsLoading ? (
+          {predictionsLoading ? (
             <Loader size="lg" />
-          ) : highlights.length === 0 ? (
-            <Text c="dimmed">Nenhum jogo das principais ligas nesta data.</Text>
           ) : (
-            <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md">
-              {highlights.map((r) => (
-                <ResultCard
-                  key={r.id}
-                  match={r}
-                  onClick={() => openMatchDetail(r.id)}
-                />
-              ))}
-            </SimpleGrid>
+            <div>
+              <Title order={4} mb="xs">Palpites — {formatDateLabel(date)}</Title>
+              {predictionsCur.length === 0 ? (
+                <Text size="sm" c="dimmed">
+                  Nenhum palpite disponível para esta data.
+                </Text>
+              ) : (
+                <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md">
+                  {predictionsCur.map((p) => (
+                    <GameCard key={p.id} p={p} />
+                  ))}
+                </SimpleGrid>
+              )}
+            </div>
           )}
         </Tabs.Panel>
       </Tabs>
