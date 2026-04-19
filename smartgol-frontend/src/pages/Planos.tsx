@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Container,
   Title,
@@ -17,8 +17,8 @@ import {
 import { IconCheck, IconCreditCard } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { getPlans } from '../api/plans';
-import { mercadoPagoCheckout } from '../api/payments';
-import type { Plan } from '../types';
+import { mercadoPagoCheckout, mercadoPagoSyncApproved } from '../api/payments';
+import type { Plan, PlanType } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 
 function billingLabel(p: Plan): string {
@@ -50,9 +50,11 @@ function periodLabel(period: Plan['billingPeriod']): string {
 }
 
 export function Planos() {
-  const { isLoggedIn } = useAuth();
+  const { isLoggedIn, setPlan } = useAuth();
   const [searchParams] = useSearchParams();
   const mpStatus = searchParams.get('mp');
+  const navigate = useNavigate();
+  const syncRanRef = useRef(false);
 
   const [plans, setPlans] = useState<Plan[]>([]);
   const [payingCode, setPayingCode] = useState<string | null>(null);
@@ -60,6 +62,35 @@ export function Planos() {
   useEffect(() => {
     getPlans().then(setPlans).catch(() => setPlans([]));
   }, []);
+
+  useEffect(() => {
+    if (!searchParams.get('mp')) syncRanRef.current = false;
+  }, [searchParams]);
+
+  /** Volta do MP com mp=pending|success: confirma no MP se já há pagamento aprovado (webhook pode falhar). */
+  useEffect(() => {
+    if (!isLoggedIn || !mpStatus || (mpStatus !== 'pending' && mpStatus !== 'success')) return;
+    if (syncRanRef.current) return;
+    syncRanRef.current = true;
+
+    mercadoPagoSyncApproved()
+      .then((r) => {
+        setPlan(r.plan as PlanType);
+        if (r.synced) {
+          notifications.show({
+            color: 'green',
+            title: 'Plano liberado',
+            message: 'Pagamento confirmado no Mercado Pago. O seu acesso já está atualizado.',
+          });
+        }
+        if (r.synced || r.plan !== 'FREE') {
+          navigate('/planos', { replace: true });
+        }
+      })
+      .catch(() => {
+        syncRanRef.current = false;
+      });
+  }, [isLoggedIn, mpStatus, navigate, setPlan]);
 
   return (
     <Container size="lg" py="xl">
@@ -75,13 +106,13 @@ export function Planos() {
 
         {mpStatus === 'success' && (
           <Alert color="green" title="Pagamento aprovado">
-            Se o webhook estiver configurado, seu plano será liberado em instantes. Faça login de novo se o menu
-            não atualizar.
+            A sincronizar com o Mercado Pago… Se o aviso não sumir em instantes, atualize a página.
           </Alert>
         )}
         {mpStatus === 'pending' && (
           <Alert color="yellow" title="Pagamento pendente">
-            Aguardando confirmação do Mercado Pago. Você receberá o acesso quando for aprovado.
+            Se já pagou (ex.: Pix), o Mercado Pago pode demorar um pouco a confirmar. Estamos a verificar
+            automaticamente; quando for aprovado, o plano atualiza sem precisar pagar de novo.
           </Alert>
         )}
         {mpStatus === 'failure' && (

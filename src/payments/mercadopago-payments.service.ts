@@ -205,7 +205,12 @@ export class MercadoPagoPaymentsService {
       );
       return;
     }
-    const paidTotal = Number(mo.paid_amount ?? approved[0]?.total_paid_amount ?? 0);
+    const paidFromOrder = Number(mo.paid_amount ?? 0);
+    const sumApproved = approved.reduce(
+      (s, p) => s + Number(p.total_paid_amount ?? p.transaction_amount ?? 0),
+      0,
+    );
+    const paidTotal = paidFromOrder > 0.01 ? paidFromOrder : sumApproved;
     await this.grantFromExternalReference(ref, paidTotal, `ordem ${merchantOrderId}`);
   }
 
@@ -251,6 +256,82 @@ export class MercadoPagoPaymentsService {
     this.logger.log(
       `Plano ${canonical} liberado para usuário ${userId} (${logLabel}).`,
     );
+  }
+
+  /**
+   * Consulta pagamentos aprovados no MP por `external_reference` (sg:userId:PLANO)
+   * e libera o plano se o webhook não tiver corrido. Útil quando o retorno é `mp=pending`
+   * mas o Pix já foi aprovado.
+   */
+  async syncApprovedPaymentsFromMp(userId: string): Promise<{
+    synced: boolean;
+    plan: string;
+    expiresAt: string | null;
+  }> {
+    if (!this.getAccessToken()) {
+      throw new ServiceUnavailableException(
+        'Mercado Pago não configurado (MERCADOPAGO_ACCESS_TOKEN).',
+      );
+    }
+    let synced = false;
+    const paymentApi = new Payment(this.mpConfig());
+    const codes = ['DAILY', 'WEEKLY', 'MONTHLY'] as const;
+
+    for (const code of codes) {
+      const ref = `sg:${userId}:${code}`;
+      let searchRes: Awaited<ReturnType<Payment['search']>>;
+      try {
+        searchRes = await paymentApi.search({
+          options: {
+            external_reference: ref,
+            limit: 20,
+            sort: 'date_created',
+            criteria: 'desc',
+          },
+        });
+      } catch (e) {
+        this.logger.warn(
+          `sync MP: busca falhou para ${ref}: ${e instanceof Error ? e.message : e}`,
+        );
+        continue;
+      }
+
+      const results = searchRes.results ?? [];
+      const plan = await this.plansService.findByCode(code);
+      if (!plan || Number(plan.price) <= 0) continue;
+      const expected = Number(plan.price);
+
+      const approved = results
+        .filter((r) => String(r.status ?? '').toLowerCase() === 'approved')
+        .sort((a, b) => {
+          const ta = new Date(
+            String(a.date_approved ?? a.date_created ?? 0),
+          ).getTime();
+          const tb = new Date(
+            String(b.date_approved ?? b.date_created ?? 0),
+          ).getTime();
+          return tb - ta;
+        });
+
+      for (const r of approved) {
+        const paid = Number(r.transaction_amount);
+        if (Math.abs(paid - expected) > 0.02) continue;
+        await this.usersService.grantSubscriptionByPlanCode(userId, code);
+        synced = true;
+        this.logger.log(
+          `sync MP: plano ${code} liberado para ${userId} (pagamento ${r.id ?? 'n/d'}).`,
+        );
+        break;
+      }
+      if (synced) break;
+    }
+
+    const access = await this.usersService.getUserAccessContext(userId);
+    return {
+      synced,
+      plan: access.plan,
+      expiresAt: access.expiresAt,
+    };
   }
 
   /**

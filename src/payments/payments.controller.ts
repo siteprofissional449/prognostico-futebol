@@ -35,6 +35,17 @@ export class PaymentsController {
     );
   }
 
+  /**
+   * Busca no Mercado Pago pagamentos aprovados com `external_reference` deste utilizador
+   * e atualiza o plano na base de dados (quando o webhook falhou ou atrasou).
+   */
+  @UseGuards(JwtAuthGuard)
+  @Post('mercadopago/sync-approved')
+  @HttpCode(200)
+  async mercadoPagoSyncApproved(@Req() req: { user: { userId: string } }) {
+    return this.mercadoPago.syncApprovedPaymentsFromMp(req.user.userId);
+  }
+
   /** Mercado Pago envia notificações por POST (e às vezes query topic=id). */
   @Post('mercadopago/webhook')
   @HttpCode(200)
