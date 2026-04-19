@@ -44,12 +44,18 @@ function addDaysLocal(base: Date, delta: number): Date {
 }
 
 function isPaidMember(plan: string | null): boolean {
-  return plan === 'DAILY' || plan === 'WEEKLY' || plan === 'PREMIUM';
+  return (
+    plan === 'DAILY' ||
+    plan === 'WEEKLY' ||
+    plan === 'MONTHLY' ||
+    plan === 'PREMIUM'
+  );
 }
 
 function planDisplayName(plan: string | null): string {
   if (plan === 'DAILY') return 'Diário';
   if (plan === 'WEEKLY') return 'Semanal';
+  if (plan === 'MONTHLY') return 'Mensal';
   if (plan === 'PREMIUM') return 'Premium mensal';
   return plan ?? '—';
 }
@@ -64,8 +70,8 @@ export function Premium() {
   const [error, setError] = useState<string | null>(null);
 
   const today = useMemo(() => new Date(), []);
-  const [from, setFrom] = useState(() => localYMD(addDaysLocal(today, -7)));
-  const [to, setTo] = useState(() => localYMD(addDaysLocal(today, 30)));
+  const [from, setFrom] = useState(() => localYMD(addDaysLocal(today, -365)));
+  const [to, setTo] = useState(() => localYMD(addDaysLocal(today, 365)));
 
   const loadPrognostics = useCallback(() => {
     if (!isSubscriber) return;
@@ -125,7 +131,7 @@ export function Premium() {
           <Badge
             size="lg"
             variant="light"
-            color={plan === 'PREMIUM' ? 'violet' : 'blue'}
+            color={plan === 'PREMIUM' || plan === 'MONTHLY' ? 'violet' : 'blue'}
           >
             Plano ativo: {planDisplayName(plan)}
           </Badge>
@@ -229,8 +235,8 @@ export function Premium() {
           </Group>
           {isSubscriber ? (
             <Text size="sm" c="dimmed">
-              Os prognósticos listados abaixo são os cadastrados em <strong>Admin → Prognósticos</strong>, filtrados
-              pelo nível do seu plano (Diário, Semanal ou Premium).
+              Lista só palpites <strong>pagos</strong> (Admin → Prognósticos), conforme o plano mínimo e o seu plano
+              ativo. Os marcados como grátis aparecem na página <strong>Prognósticos</strong> para todos.
             </Text>
           ) : (
             <Text size="sm" c="dimmed">

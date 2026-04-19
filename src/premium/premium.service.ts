@@ -26,6 +26,25 @@ function localDateKey(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+function applyDateRange(
+  list: Prognostic[],
+  from?: string,
+  to?: string,
+): Prognostic[] {
+  let out = list;
+  if (from) {
+    out = out.filter(
+      (row) => localDateKey(new Date(row.matchDate)) >= from,
+    );
+  }
+  if (to) {
+    out = out.filter(
+      (row) => localDateKey(new Date(row.matchDate)) <= to,
+    );
+  }
+  return out;
+}
+
 @Injectable()
 export class PremiumService {
   constructor(
@@ -37,6 +56,10 @@ export class PremiumService {
    * Mesma lógica dos prognósticos automáticos: o utilizador vê entradas cujo
    * plano mínimo do conteúdo é compatível com o plano do usuário.
    */
+  /**
+   * Assinantes: palpites **pagos** (plano mínimo ≥ Diário). Entradas só **grátis**
+   * não aparecem aqui — ficam em `listFreeManualPrognostics` para todos.
+   */
   async listPrognosticsForPlan(
     userPlan: string,
     from?: string,
@@ -47,20 +70,23 @@ export class PremiumService {
       order: { matchDate: 'DESC', createdAt: 'DESC' },
     });
     list = list.filter((row) => {
+      if (String(row.plan) === PrognosticPlan.FREE) return false;
       const required = prognosticRequiredTier(String(row.plan));
       return required <= tier;
     });
-    if (from) {
-      list = list.filter(
-        (row) => localDateKey(new Date(row.matchDate)) >= from,
-      );
-    }
-    if (to) {
-      list = list.filter(
-        (row) => localDateKey(new Date(row.matchDate)) <= to,
-      );
-    }
-    return list;
+    return applyDateRange(list, from, to);
+  }
+
+  /** Palpites manuais marcados como grátis — qualquer visitante (com ou sem login). */
+  async listFreeManualPrognostics(
+    from?: string,
+    to?: string,
+  ): Promise<Prognostic[]> {
+    const list = await this.prognosticRepo.find({
+      where: { plan: PrognosticPlan.FREE },
+      order: { matchDate: 'DESC', createdAt: 'DESC' },
+    });
+    return applyDateRange(list, from, to);
   }
 
   private planToTier(plan: string): number {

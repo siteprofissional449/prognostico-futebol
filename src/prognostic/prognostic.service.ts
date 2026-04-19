@@ -36,12 +36,18 @@ export class PrognosticService {
     private readonly repo: Repository<Prognostic>,
   ) {}
 
+  private normalizeOdd(v: unknown): number {
+    const n = typeof v === 'number' ? v : parseFloat(String(v ?? ''));
+    if (!Number.isFinite(n) || n < 1.01) return 1.5;
+    return Math.round(n * 100) / 100;
+  }
+
   async create(dto: CreatePrognosticDto): Promise<Prognostic> {
     const row = this.repo.create({
       homeTeam: dto.homeTeam.trim(),
       awayTeam: dto.awayTeam.trim(),
       prediction: dto.prediction.trim(),
-      odd: dto.odd,
+      odd: this.normalizeOdd(dto.odd),
       matchDate: new Date(dto.matchDate),
       status: dto.status ?? PrognosticStatus.PENDING,
       plan: dto.plan ?? PrognosticPlan.FREE,
@@ -65,7 +71,7 @@ export class PrognosticService {
     if (dto.homeTeam !== undefined) row.homeTeam = dto.homeTeam.trim();
     if (dto.awayTeam !== undefined) row.awayTeam = dto.awayTeam.trim();
     if (dto.prediction !== undefined) row.prediction = dto.prediction.trim();
-    if (dto.odd !== undefined) row.odd = dto.odd;
+    if (dto.odd !== undefined) row.odd = this.normalizeOdd(dto.odd);
     if (dto.matchDate !== undefined) row.matchDate = new Date(dto.matchDate);
     if (dto.status !== undefined) row.status = dto.status;
     if (dto.plan !== undefined) row.plan = dto.plan;

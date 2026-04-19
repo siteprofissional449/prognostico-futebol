@@ -7,6 +7,7 @@ const planLabels: Record<string, string> = {
   FREE: 'Grátis',
   DAILY: 'Diário',
   WEEKLY: 'Semanal',
+  MONTHLY: 'Mensal',
   PREMIUM: 'Premium',
 };
 
@@ -14,6 +15,7 @@ const planColors: Record<string, string> = {
   FREE: 'gray',
   DAILY: 'cyan',
   WEEKLY: 'blue',
+  MONTHLY: 'violet',
   PREMIUM: 'violet',
 };
 

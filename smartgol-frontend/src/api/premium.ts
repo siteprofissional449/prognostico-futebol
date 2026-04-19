@@ -10,3 +10,14 @@ export function getPremiumPrognostics(params?: { from?: string; to?: string }) {
     `/premium/prognostics${qs ? `?${qs}` : ''}`,
   );
 }
+
+/** Palpites manuais grátis (sem login). */
+export function getPublicManualPrognostics(params?: { from?: string; to?: string }) {
+  const q = new URLSearchParams();
+  if (params?.from) q.set('from', params.from);
+  if (params?.to) q.set('to', params.to);
+  const qs = q.toString();
+  return api<AdminPrognostic[]>(
+    `/public/manual-prognostics${qs ? `?${qs}` : ''}`,
+  );
+}

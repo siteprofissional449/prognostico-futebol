@@ -5,6 +5,7 @@ import {
   Badge,
   Modal,
   Select,
+  SegmentedControl,
   TextInput,
   Textarea,
   Stack,
@@ -32,12 +33,19 @@ const statusOptions: { value: PrognosticStatus; label: string }[] = [
   { value: 'LOST', label: 'Red' },
 ];
 
-const planOptions: { value: PlanType; label: string }[] = [
-  { value: 'FREE', label: 'Grátis' },
-  { value: 'DAILY', label: 'Diário' },
-  { value: 'WEEKLY', label: 'Semanal' },
-  { value: 'PREMIUM', label: 'Premium mensal' },
+const paidMinPlanOptions: { value: 'DAILY' | 'WEEKLY' | 'PREMIUM'; label: string }[] = [
+  { value: 'DAILY', label: 'Mínimo: Diário' },
+  { value: 'WEEKLY', label: 'Mínimo: Semanal' },
+  { value: 'PREMIUM', label: 'Mínimo: Premium mensal' },
 ];
+
+function planBadgeLabel(plan: PlanType): string {
+  if (plan === 'FREE') return 'Grátis (todos)';
+  if (plan === 'DAILY') return 'Pago · Diário+';
+  if (plan === 'WEEKLY') return 'Pago · Semanal+';
+  if (plan === 'PREMIUM' || plan === 'MONTHLY') return 'Pago · Premium+';
+  return plan;
+}
 
 function statusColor(s: PrognosticStatus) {
   if (s === 'WON') return 'green';
@@ -80,7 +88,8 @@ const emptyForm = {
   odd: 1.5,
   matchDate: '',
   status: 'PENDING' as PrognosticStatus,
-  plan: 'FREE' as PlanType,
+  visibility: 'FREE' as 'FREE' | 'PAID',
+  paidMinPlan: 'DAILY' as 'DAILY' | 'WEEKLY' | 'PREMIUM',
   analysis: '',
 };
 
@@ -124,14 +133,22 @@ export function AdminPrognosticos() {
 
   const openEdit = (row: AdminPrognostic) => {
     setEditing(row);
+    const isFree = row.plan === 'FREE';
+    const paidPlan: 'DAILY' | 'WEEKLY' | 'PREMIUM' =
+      row.plan === 'WEEKLY'
+        ? 'WEEKLY'
+        : row.plan === 'PREMIUM' || row.plan === 'MONTHLY'
+          ? 'PREMIUM'
+          : 'DAILY';
     setForm({
       homeTeam: row.homeTeam,
       awayTeam: row.awayTeam,
       prediction: row.prediction,
-      odd: row.odd,
+      odd: Number(row.odd) > 0 ? Number(row.odd) : 1.5,
       matchDate: toDatetimeLocal(row.matchDate),
       status: row.status,
-      plan: row.plan,
+      visibility: isFree ? 'FREE' : 'PAID',
+      paidMinPlan: isFree ? 'DAILY' : paidPlan,
       analysis: row.analysis ?? '',
     });
     openForm();
@@ -148,14 +165,16 @@ export function AdminPrognosticos() {
     }
     setSaving(true);
     try {
+      const plan: PlanType =
+        form.visibility === 'FREE' ? 'FREE' : form.paidMinPlan;
       const payload = {
         homeTeam: form.homeTeam.trim(),
         awayTeam: form.awayTeam.trim(),
         prediction: form.prediction.trim(),
-        odd: form.odd,
+        odd: typeof form.odd === 'number' && Number.isFinite(form.odd) ? form.odd : 1.5,
         matchDate: fromDatetimeLocal(form.matchDate),
         status: form.status,
-        plan: form.plan,
+        plan,
         analysis: form.analysis.trim() || null,
       };
       if (editing) {
@@ -165,8 +184,8 @@ export function AdminPrognosticos() {
         await createAdminPrognostic(payload);
         notifications.show({ color: 'green', message: 'Prognóstico criado.' });
       }
+      await load();
       closeForm();
-      load();
     } catch (e) {
       notifications.show({
         color: 'red',
@@ -257,8 +276,8 @@ export function AdminPrognosticos() {
                     <Text size="xs">{formatDisplayDate(r.matchDate)}</Text>
                   </Table.Td>
                   <Table.Td>
-                    <Badge variant="light" color="green" size="sm">
-                      {r.plan}
+                    <Badge variant="light" color={r.plan === 'FREE' ? 'green' : 'violet'} size="sm">
+                      {planBadgeLabel(r.plan)}
                     </Badge>
                   </Table.Td>
                   <Table.Td>
@@ -325,9 +344,17 @@ export function AdminPrognosticos() {
           />
           <Group grow>
             <NumberInput
-              label="Odd"
+              label="Odd (cotação)"
+              description="Ex.: 1,85 para o mercado escolhido"
               value={form.odd}
-              onChange={(v) => setForm((f) => ({ ...f, odd: typeof v === 'number' ? v : f.odd }))}
+              onChange={(v) =>
+                setForm((f) => {
+                  if (typeof v === 'number' && Number.isFinite(v)) return { ...f, odd: v };
+                  const parsed = parseFloat(String(v ?? '').replace(',', '.'));
+                  if (Number.isFinite(parsed) && parsed >= 1.01) return { ...f, odd: parsed };
+                  return f;
+                })
+              }
               min={1.01}
               step={0.05}
               decimalScale={2}
@@ -341,20 +368,51 @@ export function AdminPrognosticos() {
               required
             />
           </Group>
-          <Group grow>
-            <Select
-              label="Plano mínimo"
-              data={planOptions}
-              value={form.plan}
-              onChange={(v) => setForm((f) => ({ ...f, plan: (v as PlanType) || 'FREE' }))}
+          <Stack gap="xs">
+            <Text size="sm" fw={500}>
+              Quem vê este palpite
+            </Text>
+            <SegmentedControl
+              value={form.visibility}
+              onChange={(v) =>
+                setForm((f) => ({ ...f, visibility: v as 'FREE' | 'PAID' }))
+              }
+              data={[
+                {
+                  value: 'FREE',
+                  label: 'Grátis — todos (página Prognósticos)',
+                },
+                {
+                  value: 'PAID',
+                  label: 'Pago — só assinantes (Área Premium)',
+                },
+              ]}
+              fullWidth
             />
-            <Select
-              label="Status"
-              data={statusOptions}
-              value={form.status}
-              onChange={(v) => setForm((f) => ({ ...f, status: (v as PrognosticStatus) || 'PENDING' }))}
-            />
-          </Group>
+            <Text size="xs" c="dimmed">
+              Grátis não aparece na Área Premium. Pago não aparece na lista pública grátis; só quem tem o plano
+              indicado (ou superior) vê na Área Premium.
+            </Text>
+            {form.visibility === 'PAID' && (
+              <Select
+                label="Plano mínimo (assinatura)"
+                data={paidMinPlanOptions}
+                value={form.paidMinPlan}
+                onChange={(v) =>
+                  setForm((f) => ({
+                    ...f,
+                    paidMinPlan: (v as 'DAILY' | 'WEEKLY' | 'PREMIUM') || 'DAILY',
+                  }))
+                }
+              />
+            )}
+          </Stack>
+          <Select
+            label="Status"
+            data={statusOptions}
+            value={form.status}
+            onChange={(v) => setForm((f) => ({ ...f, status: (v as PrognosticStatus) || 'PENDING' }))}
+          />
           <Textarea
             label="Análise (opcional)"
             placeholder="Texto livre para justificar o palpite"

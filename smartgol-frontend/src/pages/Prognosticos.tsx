@@ -13,10 +13,12 @@ import {
 import { Link } from 'react-router-dom';
 import { IconChevronLeft, IconChevronRight } from '@tabler/icons-react';
 import { getMyPredictionsList, getPublicPredictionsList } from '../api/predictions';
+import { getPublicManualPrognostics } from '../api/premium';
 import { useAuth } from '../contexts/AuthContext';
 import { GameCard } from '../components/GameCard';
 import { PremiumLockCard } from '../components/PremiumLockCard';
-import type { PredictionView } from '../types';
+import { PremiumPrognosticCard } from '../components/PremiumPrognosticCard';
+import type { AdminPrognostic, PredictionView } from '../types';
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
@@ -62,6 +64,26 @@ export function Prognosticos() {
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [manual, setManual] = useState<AdminPrognostic[]>([]);
+  const [manualLoading, setManualLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setManualLoading(true);
+    getPublicManualPrognostics({ from: date, to: date })
+      .then((rows) => {
+        if (!cancelled) setManual(Array.isArray(rows) ? rows : []);
+      })
+      .catch(() => {
+        if (!cancelled) setManual([]);
+      })
+      .finally(() => {
+        if (!cancelled) setManualLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [date]);
 
   useEffect(() => {
     let cancelled = false;
@@ -100,9 +122,8 @@ export function Prognosticos() {
         <div>
           <Title order={2}>Prognósticos</Title>
           <Text c="dimmed" size="sm">
-            Até {meta?.freeSlotCount ?? 5} palpites completos no plano gratuito (melhores do dia); os
-            demais ficam bloqueados para incentivar o upgrade. Em cada jogo aberto aparece um{' '}
-            <Text span fw={600}>resumo curto</Text> da análise (poucas palavras).
+            Palpites automáticos: no grátis são até {meta?.freeSlotCount ?? 5} com análise completa; o restante do dia pode ficar bloqueado. Abaixo, quando existirem, aparecem os{' '}
+            <Text span fw={600}>palpites manuais grátis</Text> da equipa (só para todos os visitantes).
           </Text>
         </div>
         <Button component={Link} to="/planos" variant="light" color="violet">
@@ -145,11 +166,26 @@ export function Prognosticos() {
         </Paper>
       )}
 
+      {!manualLoading && manual.length > 0 && (
+        <Stack gap="sm">
+          <Title order={4}>Palpites da equipa (grátis)</Title>
+          <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="md">
+            {manual.map((row) => (
+              <PremiumPrognosticCard key={row.id} row={row} />
+            ))}
+          </SimpleGrid>
+        </Stack>
+      )}
+
+      <Title order={4} mt={manual.length > 0 ? 'lg' : 0}>
+        Palpites automáticos
+      </Title>
+
       {error && <Alert color="red">{error}</Alert>}
       {loading ? (
         <Loader />
       ) : items.length === 0 ? (
-        <Text c="dimmed">Nenhum prognóstico para esta data.</Text>
+        <Text c="dimmed">Nenhum prognóstico automático para esta data.</Text>
       ) : (
         <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md">
           {items.map((p) =>
