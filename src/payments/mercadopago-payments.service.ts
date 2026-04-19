@@ -92,11 +92,40 @@ export class MercadoPagoPaymentsService {
     }
 
     const result = await preference.create({ body });
-    const url = result.sandbox_init_point || result.init_point;
+    const accessToken = this.getAccessToken();
+    const isTestToken = /^TEST-/i.test(accessToken);
+    if (isTestToken) {
+      this.logger.warn(
+        'MERCADOPAGO_ACCESS_TOKEN começa com TEST- — o Mercado Pago usará Sandbox. Para cobrança real, use o Access Token de produção (aba Credenciais de produção).',
+      );
+    }
+    /** Com token de produção, a API pode devolver os dois links; nunca usar sandbox como fallback (abriria o checkout de testes). */
+    let url: string | undefined;
+    if (isTestToken) {
+      url = result.sandbox_init_point || result.init_point;
+    } else {
+      url = result.init_point;
+      if (!url && result.sandbox_init_point) {
+        this.logger.error(
+          'Mercado Pago devolveu só sandbox_init_point (sem init_point) com token de produção. No painel MP: Sua integração → Credenciais de produção → complete “Ativar credenciais” (site, ramo, termos).',
+        );
+        throw new BadRequestException(
+          'Pagamento em modo de testes: o Mercado Pago ainda não liberou o link de produção (init_point). No painel de desenvolvedores, ative as credenciais de produção com os dados do negócio e o site.',
+        );
+      }
+    }
     if (!url) {
       throw new BadRequestException(
         'Não foi possível obter o link de pagamento do Mercado Pago.',
       );
+    }
+    try {
+      const host = new URL(url).hostname;
+      this.logger.log(
+        `Checkout Mercado Pago: host=${host}${host.includes('sandbox') ? ' (ambiente de testes)' : ''}`,
+      );
+    } catch {
+      /* ignore */
     }
     return { url };
   }
