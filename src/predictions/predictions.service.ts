@@ -177,6 +177,16 @@ export class PredictionsService {
     return trimmed;
   }
 
+  /**
+   * Partidas fictícias do `FootballService.getMockMatches` (Time A, Time B, …)
+   * quando não há `FOOTBALL_API_KEY`. Não devem aparecer como destaque na home.
+   */
+  private isPlaceholderMockPrediction(p: Prediction): boolean {
+    const looksMock = (name: string) =>
+      /^Time\s+[A-Z]$/i.test(String(name ?? '').trim());
+    return looksMock(p.homeTeam) || looksMock(p.awayTeam);
+  }
+
   private resolveEffectiveDate(
     requestedDate: string,
     access: UserAccessContext,
@@ -219,7 +229,8 @@ export class PredictionsService {
   async listHomeTeasers(date?: string): Promise<PredictionsListResponseDto> {
     const targetDate = this.normalizeDate(date);
     const ranked = await this.findRankedForDate(targetDate);
-    const slice = ranked.slice(0, HOME_PREDICTION_TEASERS);
+    const realRanked = ranked.filter((p) => !this.isPlaceholderMockPrediction(p));
+    const slice = realRanked.slice(0, HOME_PREDICTION_TEASERS);
     const freeAccess: UserAccessContext = {
       plan: PlanType.FREE,
       userAccessTier: 0,

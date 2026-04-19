@@ -9,11 +9,13 @@ import {
   IconClock,
   IconChartDots,
 } from '@tabler/icons-react';
+import { getHomePredictions } from '../api/predictions';
 import { getResultsOfDay, getTopLeaguesMatches, getMatchDetail, getGenerationInfo } from '../api/football';
 import { useAuth } from '../contexts/AuthContext';
+import { GameCard } from '../components/GameCard';
 import { ResultCard } from '../components/ResultCard';
 import { MatchDetailModal } from '../components/MatchDetailModal';
-import type { MatchResult, MatchDetail, GenerationInfo } from '../types';
+import type { PredictionView, MatchResult, MatchDetail, GenerationInfo } from '../types';
 import type { PlanType } from '../types';
 
 function todayISO() {
@@ -75,6 +77,11 @@ export function Home() {
   const canGoPrev = !freePlan || date > yesterday;
   const canGoNext = !freePlan || date < tomorrow;
 
+  /** Jogos do dia na home (teaser de até 3). */
+  const [predictionsCur, setPredictionsCur] = useState<PredictionView[]>([]);
+  const [predictionsLoading, setPredictionsLoading] = useState(true);
+  const [predictionsError, setPredictionsError] = useState<string | null>(null);
+
   const [results, setResults] = useState<MatchResult[]>([]);
   const [resultsLoading, setResultsLoading] = useState(true);
   const [resultsError, setResultsError] = useState<string | null>(null);
@@ -99,6 +106,27 @@ export function Home() {
       });
     return () => { cancelled = true; };
   }, []);
+
+  const fetchPredictions = () => {
+    return getHomePredictions(date).then((r) => {
+      const cur = r.items || [];
+      setPredictionsCur(Array.isArray(cur) ? cur : []);
+    });
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    setPredictionsLoading(true);
+    setPredictionsError(null);
+    fetchPredictions()
+      .catch((e) => {
+        if (!cancelled) setPredictionsError(e.message || 'Erro ao carregar jogos.');
+      })
+      .finally(() => {
+        if (!cancelled) setPredictionsLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [date]);
 
   useEffect(() => {
     let cancelled = false;
@@ -175,7 +203,8 @@ export function Home() {
               <Text size="sm" c="dimmed" mb="xs">
                 {genInfo.scheduleDescription}
                 {' · '}
-                Plano grátis: 5 palpites com análise completa (melhores do dia); lista completa em Prognósticos. Assinantes veem todos.
+                Plano grátis: 5 palpites com análise completa; na home mostramos até 3 dos melhores
+                (só jogos reais). Lista completa em Prognósticos. Assinantes veem todos.
               </Text>
               {genInfo.lastAt ? (
                 <Text size="sm">
@@ -249,6 +278,39 @@ export function Home() {
         </Group>
       </Group>
 
+      <Paper withBorder p="lg" radius="md" mb="lg">
+        <Group justify="space-between" align="flex-start" wrap="wrap" mb="md">
+          <div>
+            <Title order={3} mb={6}>
+              Prognósticos do dia
+            </Title>
+            <Text size="sm" c="dimmed">
+              Os 3 melhores palpites para {formatDateLabel(date)}, com um resumo curto de cada jogo.{' '}
+              <Link to="/prognosticos" style={{ color: 'var(--mantine-color-green-4)' }}>
+                Ver todos os prognósticos
+              </Link>
+              .
+            </Text>
+          </div>
+        </Group>
+        {predictionsError && (
+          <Alert color="red" mb="md">{predictionsError}</Alert>
+        )}
+        {predictionsLoading ? (
+          <Loader size="lg" />
+        ) : predictionsCur.length === 0 ? (
+          <Text size="sm" c="dimmed">
+            Nenhum palpite disponível para esta data.
+          </Text>
+        ) : (
+          <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md">
+            {predictionsCur.slice(0, 3).map((p) => (
+              <GameCard key={p.id} p={p} />
+            ))}
+          </SimpleGrid>
+        )}
+      </Paper>
+
       <Tabs defaultValue="jogos">
         <Tabs.List mb="lg">
           <Tabs.Tab value="jogos" leftSection={<IconCalendarEvent size={16} />}>
@@ -314,15 +376,34 @@ export function Home() {
 
         <Tabs.Panel value="palpites">
           <Text size="sm" c="dimmed" mb="md">
-            Os palpites do dia (grátis e por plano) estão na página{' '}
+            Os mesmos palpites do bloco <Text span fw={600}>Prognósticos do dia</Text> (até 3). Resumo curto em cada
+            card. Lista completa:{' '}
             <Link to="/prognosticos" style={{ color: 'var(--mantine-color-green-4)' }}>
               Prognósticos
             </Link>
-            , com a lista completa e navegação por data.
+            .
           </Text>
-          <Button component={Link} to="/prognosticos" variant="light">
-            Abrir Prognósticos
-          </Button>
+          {predictionsError && (
+            <Alert color="red" mb="md">{predictionsError}</Alert>
+          )}
+          {predictionsLoading ? (
+            <Loader size="lg" />
+          ) : (
+            <div>
+              <Title order={4} mb="xs">Palpites — {formatDateLabel(date)}</Title>
+              {predictionsCur.length === 0 ? (
+                <Text size="sm" c="dimmed">
+                  Nenhum palpite disponível para esta data.
+                </Text>
+              ) : (
+                <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md">
+                  {predictionsCur.map((p) => (
+                    <GameCard key={p.id} p={p} />
+                  ))}
+                </SimpleGrid>
+              )}
+            </div>
+          )}
         </Tabs.Panel>
       </Tabs>
 
