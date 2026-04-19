@@ -106,6 +106,8 @@ export interface AdminPrognostic {
   awayTeam: string;
   prediction: string;
   odd: number;
+  /** 0–1 no servidor (ex.: 0,65 = 65%). Opcional. */
+  probability?: number | null;
   matchDate: string;
   status: PrognosticStatus;
   plan: PlanType;
@@ -118,6 +120,7 @@ export interface AdminPrognosticPayload {
   awayTeam: string;
   prediction: string;
   odd: number;
+  probability?: number | null;
   matchDate: string;
   status?: PrognosticStatus;
   plan?: PlanType;

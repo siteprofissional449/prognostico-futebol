@@ -31,6 +31,10 @@ export class Prognostic {
   @Column({ type: 'double precision' })
   odd: number;
 
+  /** Probabilidade associada ao palpite (0–1), ex. 0,65 = 65%. Opcional. */
+  @Column({ type: 'double precision', nullable: true })
+  probability: number | null;
+
   @Column({ type: 'timestamptz' })
   matchDate: Date;
 

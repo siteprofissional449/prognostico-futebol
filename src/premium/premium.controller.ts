@@ -10,12 +10,12 @@ export class PremiumController {
 
   @Get('prognostics')
   listPrognostics(
-    @Req() req: { user: { plan: string } },
+    @Req() req: { user: { plan: string; userAccessTier?: number } },
     @Query('from') from?: string,
     @Query('to') to?: string,
   ) {
     return this.premiumService.listPrognosticsForPlan(
-      req.user.plan,
+      req.user.userAccessTier ?? 0,
       from,
       to,
     );

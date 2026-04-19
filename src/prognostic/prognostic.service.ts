@@ -12,6 +12,8 @@ export interface CreatePrognosticDto {
   awayTeam: string;
   prediction: string;
   odd: number;
+  /** 0–1 (ex.: 0,65) ou 0–100 (percentagem); normalizado no serviço. */
+  probability?: number | null;
   matchDate: string;
   status?: PrognosticStatus;
   plan?: PrognosticPlan;
@@ -23,6 +25,7 @@ export interface UpdatePrognosticDto {
   awayTeam?: string;
   prediction?: string;
   odd?: number;
+  probability?: number | null;
   matchDate?: string;
   status?: PrognosticStatus;
   plan?: PrognosticPlan;
@@ -42,12 +45,23 @@ export class PrognosticService {
     return Math.round(n * 100) / 100;
   }
 
+  /** Aceita fração 0–1 ou percentagem 0–100. */
+  private normalizeProbability(v: unknown): number | null {
+    if (v === null || v === undefined || v === '') return null;
+    const n = typeof v === 'number' ? v : parseFloat(String(v));
+    if (!Number.isFinite(n)) return null;
+    if (n > 1 && n <= 100) return Math.min(1, Math.max(0, n / 100));
+    if (n >= 0 && n <= 1) return n;
+    return null;
+  }
+
   async create(dto: CreatePrognosticDto): Promise<Prognostic> {
     const row = this.repo.create({
       homeTeam: dto.homeTeam.trim(),
       awayTeam: dto.awayTeam.trim(),
       prediction: dto.prediction.trim(),
       odd: this.normalizeOdd(dto.odd),
+      probability: this.normalizeProbability(dto.probability),
       matchDate: new Date(dto.matchDate),
       status: dto.status ?? PrognosticStatus.PENDING,
       plan: dto.plan ?? PrognosticPlan.FREE,
@@ -72,6 +86,9 @@ export class PrognosticService {
     if (dto.awayTeam !== undefined) row.awayTeam = dto.awayTeam.trim();
     if (dto.prediction !== undefined) row.prediction = dto.prediction.trim();
     if (dto.odd !== undefined) row.odd = this.normalizeOdd(dto.odd);
+    if (dto.probability !== undefined) {
+      row.probability = this.normalizeProbability(dto.probability);
+    }
     if (dto.matchDate !== undefined) row.matchDate = new Date(dto.matchDate);
     if (dto.status !== undefined) row.status = dto.status;
     if (dto.plan !== undefined) row.plan = dto.plan;

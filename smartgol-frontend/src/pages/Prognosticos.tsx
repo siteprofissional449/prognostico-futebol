@@ -13,7 +13,7 @@ import {
 import { Link } from 'react-router-dom';
 import { IconChevronLeft, IconChevronRight } from '@tabler/icons-react';
 import { getMyPredictionsList, getPublicPredictionsList } from '../api/predictions';
-import { getPublicManualPrognostics } from '../api/premium';
+import { getPublicManualPrognostics, getPremiumPrognostics } from '../api/premium';
 import { useAuth } from '../contexts/AuthContext';
 import { GameCard } from '../components/GameCard';
 import { PremiumLockCard } from '../components/PremiumLockCard';
@@ -66,6 +66,10 @@ export function Prognosticos() {
   const [error, setError] = useState<string | null>(null);
   const [manual, setManual] = useState<AdminPrognostic[]>([]);
   const [manualLoading, setManualLoading] = useState(true);
+  const [manualPaid, setManualPaid] = useState<AdminPrognostic[]>([]);
+  const [manualPaidLoading, setManualPaidLoading] = useState(false);
+
+  const paid = isLoggedIn && isPaidPlan(plan);
 
   useEffect(() => {
     let cancelled = false;
@@ -84,6 +88,29 @@ export function Prognosticos() {
       cancelled = true;
     };
   }, [date]);
+
+  useEffect(() => {
+    if (!paid) {
+      setManualPaid([]);
+      setManualPaidLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setManualPaidLoading(true);
+    getPremiumPrognostics({ from: date, to: date })
+      .then((rows) => {
+        if (!cancelled) setManualPaid(Array.isArray(rows) ? rows : []);
+      })
+      .catch(() => {
+        if (!cancelled) setManualPaid([]);
+      })
+      .finally(() => {
+        if (!cancelled) setManualPaidLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [paid, date]);
 
   useEffect(() => {
     let cancelled = false;
@@ -114,16 +141,15 @@ export function Prognosticos() {
     };
   }, [date, isLoggedIn]);
 
-  const paid = isLoggedIn && isPaidPlan(plan);
-
   return (
     <Stack p="md" maw={1200} mx="auto" gap="lg">
       <Group justify="space-between" align="flex-start" wrap="wrap">
         <div>
           <Title order={2}>Prognósticos</Title>
           <Text c="dimmed" size="sm">
-            Palpites automáticos: no grátis são até {meta?.freeSlotCount ?? 5} com análise completa; o restante do dia pode ficar bloqueado. Abaixo, quando existirem, aparecem os{' '}
-            <Text span fw={600}>palpites manuais grátis</Text> da equipa (só para todos os visitantes).
+            Palpites automáticos: no grátis são até {meta?.freeSlotCount ?? 5} com análise completa; o restante do dia pode ficar bloqueado. Os{' '}
+            <Text span fw={600}>palpites manuais grátis</Text> aparecem para todos. Os marcados como{' '}
+            <Text span fw={600}>pago</Text> só para quem tem assinatura compatível (nesta página, se estiver logado, e na Área Premium).
           </Text>
         </div>
         <Button component={Link} to="/planos" variant="light" color="violet">
@@ -177,7 +203,25 @@ export function Prognosticos() {
         </Stack>
       )}
 
-      <Title order={4} mt={manual.length > 0 ? 'lg' : 0}>
+      {paid && (manualPaidLoading || manualPaid.length > 0) && (
+        <Stack gap="sm" mt={manual.length > 0 ? 'lg' : 0}>
+          <Title order={4}>Palpites da equipa (pago — o seu plano)</Title>
+          {manualPaidLoading ? (
+            <Loader size="sm" />
+          ) : (
+            <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="md">
+              {manualPaid.map((row) => (
+                <PremiumPrognosticCard key={row.id} row={row} />
+              ))}
+            </SimpleGrid>
+          )}
+        </Stack>
+      )}
+
+      <Title
+        order={4}
+        mt={manual.length > 0 || (paid && manualPaid.length > 0) ? 'lg' : 0}
+      >
         Palpites automáticos
       </Title>
 

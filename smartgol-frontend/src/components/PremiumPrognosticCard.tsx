@@ -72,9 +72,26 @@ export function PremiumPrognosticCard({ row }: { row: AdminPrognostic }) {
       <Text size="sm" fw={600} c="green.4" mb={4}>
         Palpite: {row.prediction}
       </Text>
-      <Text size="sm" c="dimmed">
-        Odd sugerida: <strong style={{ color: 'var(--mantine-color-gray-2)' }}>{row.odd}</strong>
-      </Text>
+      <Group gap="xl" mt={4} wrap="wrap">
+        <div>
+          <Text size="xs" c="dimmed">
+            Probabilidade
+          </Text>
+          <Text size="sm" fw={600} c="green.4">
+            {row.probability != null && Number.isFinite(Number(row.probability))
+              ? `${(Number(row.probability) * 100).toFixed(1)}%`
+              : '—'}
+          </Text>
+        </div>
+        <div>
+          <Text size="xs" c="dimmed">
+            Chance
+          </Text>
+          <Text size="sm" fw={600} style={{ color: 'var(--mantine-color-gray-2)' }}>
+            {Number(row.odd).toFixed(2)}
+          </Text>
+        </div>
+      </Group>
 
       {row.analysis ? (
         <Stack gap="xs" mt="md">

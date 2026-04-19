@@ -53,19 +53,16 @@ export class PremiumService {
   ) {}
 
   /**
-   * Mesma lógica dos prognósticos automáticos: o utilizador vê entradas cujo
-   * plano mínimo do conteúdo é compatível com o plano do usuário.
-   */
-  /**
-   * Assinantes: palpites **pagos** (plano mínimo ≥ Diário). Entradas só **grátis**
-   * não aparecem aqui — ficam em `listFreeManualPrognostics` para todos.
+   * Assinantes: palpites manuais **pagos** (plano mínimo ≥ Diário). Os só **grátis**
+   * ficam em `listFreeManualPrognostics` para todos.
+   * Usa `userAccessTier` (0–3, igual ao UsersService) para filtrar o mínimo exigido.
    */
   async listPrognosticsForPlan(
-    userPlan: string,
+    userAccessTier: number,
     from?: string,
     to?: string,
   ): Promise<Prognostic[]> {
-    const tier = this.planToTier(userPlan);
+    const tier = Number.isFinite(userAccessTier) ? userAccessTier : 0;
     let list = await this.prognosticRepo.find({
       order: { matchDate: 'DESC', createdAt: 'DESC' },
     });
@@ -89,12 +86,4 @@ export class PremiumService {
     return applyDateRange(list, from, to);
   }
 
-  private planToTier(plan: string): number {
-    if (plan === 'MONTHLY' || plan === 'PREMIUM') {
-      return PLAN_ORDER[PrognosticPlan.PREMIUM];
-    }
-    if (plan === 'WEEKLY') return PLAN_ORDER[PrognosticPlan.WEEKLY];
-    if (plan === 'DAILY') return PLAN_ORDER[PrognosticPlan.DAILY];
-    return PLAN_ORDER[PrognosticPlan.FREE];
-  }
 }

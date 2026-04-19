@@ -86,6 +86,8 @@ const emptyForm = {
   awayTeam: '',
   prediction: '',
   odd: 1.5,
+  /** Percentagem 0–100; null = não informar (API grava null). */
+  probabilityPct: null as number | null,
   matchDate: '',
   status: 'PENDING' as PrognosticStatus,
   visibility: 'FREE' as 'FREE' | 'PAID',
@@ -140,11 +142,15 @@ export function AdminPrognosticos() {
         : row.plan === 'PREMIUM' || row.plan === 'MONTHLY'
           ? 'PREMIUM'
           : 'DAILY';
+    const p = row.probability;
+    const probabilityPct =
+      p != null && Number.isFinite(Number(p)) ? Math.round(Number(p) * 1000) / 10 : null;
     setForm({
       homeTeam: row.homeTeam,
       awayTeam: row.awayTeam,
       prediction: row.prediction,
       odd: Number(row.odd) > 0 ? Number(row.odd) : 1.5,
+      probabilityPct,
       matchDate: toDatetimeLocal(row.matchDate),
       status: row.status,
       visibility: isFree ? 'FREE' : 'PAID',
@@ -167,11 +173,16 @@ export function AdminPrognosticos() {
     try {
       const plan: PlanType =
         form.visibility === 'FREE' ? 'FREE' : form.paidMinPlan;
+      const probability =
+        form.probabilityPct != null && Number.isFinite(form.probabilityPct)
+          ? Math.min(100, Math.max(0, form.probabilityPct)) / 100
+          : null;
       const payload = {
         homeTeam: form.homeTeam.trim(),
         awayTeam: form.awayTeam.trim(),
         prediction: form.prediction.trim(),
         odd: typeof form.odd === 'number' && Number.isFinite(form.odd) ? form.odd : 1.5,
+        probability,
         matchDate: fromDatetimeLocal(form.matchDate),
         status: form.status,
         plan,
@@ -237,11 +248,12 @@ export function AdminPrognosticos() {
       </Group>
 
       <ScrollArea type="scroll" offsetScrollbars>
-        <Table striped highlightOnHover withTableBorder miw={900}>
+        <Table striped highlightOnHover withTableBorder miw={980}>
           <Table.Thead>
             <Table.Tr>
               <Table.Th>Jogo</Table.Th>
               <Table.Th>Palpite</Table.Th>
+              <Table.Th>% jogo</Table.Th>
               <Table.Th>Odd</Table.Th>
               <Table.Th>Data jogo</Table.Th>
               <Table.Th>Plano</Table.Th>
@@ -252,7 +264,7 @@ export function AdminPrognosticos() {
           <Table.Tbody>
             {rows.length === 0 && !loading ? (
               <Table.Tr>
-                <Table.Td colSpan={7}>
+                <Table.Td colSpan={8}>
                   <Text c="dimmed" py="md" ta="center">
                     Nenhum prognóstico cadastrado.
                   </Text>
@@ -269,6 +281,13 @@ export function AdminPrognosticos() {
                   <Table.Td>
                     <Text size="sm" lineClamp={2} maw={220}>
                       {r.prediction}
+                    </Text>
+                  </Table.Td>
+                  <Table.Td>
+                    <Text size="xs">
+                      {r.probability != null && Number.isFinite(Number(r.probability))
+                        ? `${(Number(r.probability) * 100).toFixed(0)}%`
+                        : '—'}
                     </Text>
                   </Table.Td>
                   <Table.Td>{r.odd}</Table.Td>
@@ -344,6 +363,24 @@ export function AdminPrognosticos() {
           />
           <Group grow>
             <NumberInput
+              label="Percentagem do jogo"
+              description="Opcional. Confiança ou probabilidade que você atribui a este palpite (0 a 100)."
+              placeholder="Ex.: 62"
+              suffix="%"
+              value={form.probabilityPct ?? ''}
+              onChange={(v) =>
+                setForm((f) => {
+                  if (v === '' || v === null) return { ...f, probabilityPct: null };
+                  if (typeof v === 'number' && Number.isFinite(v)) return { ...f, probabilityPct: v };
+                  return f;
+                })
+              }
+              min={0}
+              max={100}
+              step={0.5}
+              decimalScale={1}
+            />
+            <NumberInput
               label="Odd (cotação)"
               description="Ex.: 1,85 para o mercado escolhido"
               value={form.odd}
@@ -360,14 +397,14 @@ export function AdminPrognosticos() {
               decimalScale={2}
               fixedDecimalScale
             />
-            <TextInput
-              label="Data e hora do jogo"
-              type="datetime-local"
-              value={form.matchDate}
-              onChange={(e) => setForm((f) => ({ ...f, matchDate: e.currentTarget.value }))}
-              required
-            />
           </Group>
+          <TextInput
+            label="Data e hora do jogo"
+            type="datetime-local"
+            value={form.matchDate}
+            onChange={(e) => setForm((f) => ({ ...f, matchDate: e.currentTarget.value }))}
+            required
+          />
           <Stack gap="xs">
             <Text size="sm" fw={500}>
               Quem vê este palpite

@@ -10,7 +10,7 @@ import { Repository } from 'typeorm';
 import axios, { isAxiosError } from 'axios';
 import { FootballService, ApiMatch } from '../football/football.service';
 import { GenerationMeta } from '../football/generation-meta.entity';
-import { PredictionsService } from './predictions.service';
+import { PredictionsService, FREE_PREDICTION_SLOTS } from './predictions.service';
 import { Prediction, PlanType } from './prediction.entity';
 
 export type PredictionMarket =
@@ -27,7 +27,6 @@ const MIN_PUBLISHED_ODD =
   Number(process.env.MIN_PREDICTION_ODD) > 1
     ? Number(process.env.MIN_PREDICTION_ODD)
     : 1.65;
-const FREE_TIER_MAX_GAMES = 5;
 const BATCH_MAX_MATCHES = 22;
 const BATCH_MAX_PICKS = 8;
 const MIN_CONFIDENCE_AI = 58;
@@ -773,7 +772,7 @@ export class PredictionService {
     });
     return filtered.map((p, i) => ({
       ...p,
-      minPlan: i < FREE_TIER_MAX_GAMES ? PlanType.FREE : PlanType.DAILY,
+      minPlan: i < FREE_PREDICTION_SLOTS ? PlanType.FREE : PlanType.DAILY,
     }));
   }
 
