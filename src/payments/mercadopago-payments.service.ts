@@ -5,7 +5,12 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { MercadoPagoConfig, Preference, Payment } from 'mercadopago';
+import {
+  MercadoPagoConfig,
+  Preference,
+  Payment,
+  MerchantOrder,
+} from 'mercadopago';
 import { PlansService } from '../plans/plans.service';
 import { UsersService } from '../users/users.service';
 
@@ -153,9 +158,11 @@ export class MercadoPagoPaymentsService {
     body: unknown,
     query: Record<string, string>,
   ): Promise<void> {
-    const paymentId = this.extractPaymentId(body, query);
-    if (!paymentId) {
-      this.logger.debug('Webhook MP sem id de pagamento — ignorado.');
+    const target = this.parseWebhookTarget(body, query);
+    if (!target) {
+      this.logger.debug(
+        'Webhook MP sem payment/merchant_order identificável — ignorado.',
+      );
       return;
     }
 
@@ -166,38 +173,11 @@ export class MercadoPagoPaymentsService {
     }
 
     try {
-      const paymentApi = new Payment(this.mpConfig());
-      const pay = await paymentApi.get({ id: paymentId });
-      if (pay.status !== 'approved') {
-        this.logger.log(`Pagamento ${paymentId} status=${pay.status} — sem liberação.`);
-        return;
+      if (target.topic === 'merchant_order') {
+        await this.grantFromMerchantOrder(target.id);
+      } else {
+        await this.grantFromPaymentId(target.id);
       }
-
-      const ref = pay.external_reference?.trim();
-      if (!ref?.startsWith('sg:')) {
-        this.logger.warn(`external_reference inválido: ${ref}`);
-        return;
-      }
-      const parts = ref.split(':');
-      if (parts.length < 3) return;
-      const userId = parts[1];
-      const planCode = parts[2] as PaidPlanCode;
-      if (!PAID_PLAN_CODES.includes(planCode)) return;
-      const canonical = planCode === 'PREMIUM' ? 'MONTHLY' : planCode;
-      const plan = await this.plansService.findByCode(canonical);
-      if (!plan) return;
-
-      const paid = Number(pay.transaction_amount);
-      const expected = Number(plan.price);
-      if (Math.abs(paid - expected) > 0.02) {
-        this.logger.warn(
-          `Valor divergente pagamento ${paymentId}: pago ${paid}, esperado ${expected}`,
-        );
-        return;
-      }
-
-      await this.usersService.grantSubscriptionByPlanCode(userId, canonical);
-      this.logger.log(`Plano ${canonical} liberado para usuário ${userId} (pagamento ${paymentId}).`);
     } catch (e) {
       this.logger.error(
         `Erro ao processar webhook MP: ${e instanceof Error ? e.message : e}`,
@@ -205,20 +185,125 @@ export class MercadoPagoPaymentsService {
     }
   }
 
-  private extractPaymentId(
+  /** Checkout Pro costuma notificar `merchant_order`; o `data.id` é da ordem, não do pagamento. */
+  private async grantFromMerchantOrder(merchantOrderId: string): Promise<void> {
+    const moApi = new MerchantOrder(this.mpConfig());
+    const mo = await moApi.get({ merchantOrderId });
+    const ref = mo.external_reference?.trim();
+    if (!ref?.startsWith('sg:')) {
+      this.logger.warn(
+        `Ordem MP ${merchantOrderId}: external_reference inválido: ${ref ?? '(vazio)'}`,
+      );
+      return;
+    }
+    const approved = (mo.payments ?? []).filter(
+      (p) => String(p.status).toLowerCase() === 'approved',
+    );
+    if (approved.length === 0) {
+      this.logger.log(
+        `Ordem MP ${merchantOrderId} sem pagamento aprovado (order_status=${mo.order_status ?? 'n/d'}).`,
+      );
+      return;
+    }
+    const paidTotal = Number(mo.paid_amount ?? approved[0]?.total_paid_amount ?? 0);
+    await this.grantFromExternalReference(ref, paidTotal, `ordem ${merchantOrderId}`);
+  }
+
+  private async grantFromPaymentId(paymentId: string): Promise<void> {
+    const paymentApi = new Payment(this.mpConfig());
+    const pay = await paymentApi.get({ id: paymentId });
+    if (pay.status !== 'approved') {
+      this.logger.log(`Pagamento ${paymentId} status=${pay.status} — sem liberação.`);
+      return;
+    }
+    const ref = pay.external_reference?.trim();
+    if (!ref?.startsWith('sg:')) {
+      this.logger.warn(`external_reference inválido: ${ref}`);
+      return;
+    }
+    const paid = Number(pay.transaction_amount);
+    await this.grantFromExternalReference(ref, paid, `pagamento ${paymentId}`);
+  }
+
+  private async grantFromExternalReference(
+    ref: string,
+    paidAmount: number,
+    logLabel: string,
+  ): Promise<void> {
+    const parts = ref.split(':');
+    if (parts.length < 3) return;
+    const userId = parts[1];
+    const planCode = parts[2] as PaidPlanCode;
+    if (!PAID_PLAN_CODES.includes(planCode)) return;
+    const canonical = planCode === 'PREMIUM' ? 'MONTHLY' : planCode;
+    const plan = await this.plansService.findByCode(canonical);
+    if (!plan) return;
+
+    const expected = Number(plan.price);
+    if (Math.abs(paidAmount - expected) > 0.02) {
+      this.logger.warn(
+        `Valor divergente (${logLabel}): pago ${paidAmount}, esperado ${expected} (plano ${canonical}).`,
+      );
+      return;
+    }
+
+    await this.usersService.grantSubscriptionByPlanCode(userId, canonical);
+    this.logger.log(
+      `Plano ${canonical} liberado para usuário ${userId} (${logLabel}).`,
+    );
+  }
+
+  /**
+   * IPN antigo: ?topic=payment|merchant_order&id=.
+   * Webhook JSON: type + data.id; ou resource como URL.
+   */
+  private parseWebhookTarget(
     body: unknown,
     query: Record<string, string>,
-  ): string | undefined {
-    if (query?.topic === 'payment' && query?.id) {
-      return String(query.id);
+  ): { topic: 'payment' | 'merchant_order'; id: string } | undefined {
+    const qTopic = query?.topic?.toLowerCase();
+    const qId = query?.id;
+    if (qId && (qTopic === 'payment' || qTopic === 'merchant_order')) {
+      return { topic: qTopic, id: String(qId) };
     }
+
     if (body && typeof body === 'object') {
       const b = body as Record<string, unknown>;
+      const t = String(b.type ?? b.topic ?? '')
+        .toLowerCase()
+        .trim();
       const data = b.data as Record<string, unknown> | undefined;
-      if (data?.id != null) return String(data.id);
-      const d = b.resource as string | undefined;
-      if (typeof d === 'string' && /^\d+$/.test(d)) return d;
+      const dataId = data?.id != null ? String(data.id) : undefined;
+
+      if (dataId) {
+        if (t === 'payment') {
+          return { topic: 'payment', id: dataId };
+        }
+        if (
+          t === 'merchant_order' ||
+          t.includes('merchant_order') ||
+          t === 'topic_merchant_order_wh'
+        ) {
+          return { topic: 'merchant_order', id: dataId };
+        }
+      }
+
+      const resource = b.resource;
+      if (typeof resource === 'string') {
+        const payUrl = resource.match(/\/payments\/(\d+)/);
+        if (payUrl) return { topic: 'payment', id: payUrl[1] };
+        const moUrl = resource.match(/\/merchant_orders\/(\d+)/);
+        if (moUrl) return { topic: 'merchant_order', id: moUrl[1] };
+        if (/^\d+$/.test(resource.trim())) {
+          return { topic: 'payment', id: resource.trim() };
+        }
+      }
+
+      if (dataId && !t) {
+        return { topic: 'payment', id: dataId };
+      }
     }
+
     return undefined;
   }
 }
