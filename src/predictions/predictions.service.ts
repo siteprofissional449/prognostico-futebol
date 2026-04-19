@@ -179,11 +179,13 @@ export class PredictionsService {
 
   /**
    * Partidas fictícias do `FootballService.getMockMatches` (Time A, Time B, …)
-   * quando não há `FOOTBALL_API_KEY`. Não devem aparecer como destaque na home.
+   * quando não há `FOOTBALL_API_KEY`. Aceita também "Tempo A" (ex.: UI ou dados antigos).
    */
   private isPlaceholderMockPrediction(p: Prediction): boolean {
-    const looksMock = (name: string) =>
-      /^Time\s+[A-Z]$/i.test(String(name ?? '').trim());
+    const looksMock = (name: string) => {
+      const s = String(name ?? '').trim();
+      return /^Time\s+[A-Z]$/i.test(s) || /^Tempo\s+[A-Z]$/i.test(s);
+    };
     return looksMock(p.homeTeam) || looksMock(p.awayTeam);
   }
 
@@ -205,13 +207,18 @@ export class PredictionsService {
     const requestedDate = this.normalizeDate(date);
     const effectiveDate = this.resolveEffectiveDate(requestedDate, access);
     const ranked = await this.findRankedForDate(effectiveDate);
+    const rankedFiltered = ranked.filter(
+      (p) => !this.isPlaceholderMockPrediction(p),
+    );
     const resultsByMatch =
       access.userAccessTier >= PLAN_ORDER[PlanType.WEEKLY]
         ? await this.loadResultsForDate(effectiveDate)
         : new Map<string, MatchResultDto>();
-    const items = ranked.map((p, idx) => this.toViewDto(p, idx, access, resultsByMatch));
+    const items = rankedFiltered.map((p, idx) =>
+      this.toViewDto(p, idx, access, resultsByMatch),
+    );
     const meta = new PredictionsListMetaDto();
-    meta.total = ranked.length;
+    meta.total = rankedFiltered.length;
     meta.freeSlotCount = FREE_PREDICTION_SLOTS;
     meta.homeTeaserCount = HOME_PREDICTION_TEASERS;
     meta.requestedDate = requestedDate;
@@ -246,7 +253,7 @@ export class PredictionsService {
       return dto;
     });
     const meta = new PredictionsListMetaDto();
-    meta.total = ranked.length;
+    meta.total = realRanked.length;
     meta.freeSlotCount = FREE_PREDICTION_SLOTS;
     meta.homeTeaserCount = HOME_PREDICTION_TEASERS;
     meta.requestedDate = targetDate;
@@ -291,7 +298,10 @@ export class PredictionsService {
     const days: PredictionsHistoryDayDto[] = [];
     const sortedDates = [...byDate.keys()].sort((a, b) => (a < b ? 1 : -1));
     for (const d of sortedDates) {
-      const list = byDate.get(d) || [];
+      const list = (byDate.get(d) || []).filter(
+        (p) => !this.isPlaceholderMockPrediction(p),
+      );
+      if (list.length === 0) continue;
       const results = await this.loadResultsForDate(d);
       const items = list.map((p, idx) => this.toViewDto(p, idx, access, results));
       const day = new PredictionsHistoryDayDto();
