@@ -12,6 +12,27 @@ import { UsersService } from '../users/users.service';
 const PAID_PLAN_CODES = ['DAILY', 'WEEKLY', 'MONTHLY', 'PREMIUM'] as const;
 type PaidPlanCode = (typeof PAID_PLAN_CODES)[number];
 
+/**
+ * `FRONTEND_URL` pode listar várias origens separadas por vírgula (CORS em `main.ts`).
+ * As `back_urls` do Mercado Pago precisam ser uma única URL absoluta; vírgula no meio
+ * quebra o host (ex.: `site.vercel.app,https` → DNS inválido).
+ */
+function primarySiteBaseUrl(raw: string | undefined): string {
+  const fallback = 'http://localhost:5173';
+  if (!raw?.trim()) return fallback;
+  const segments = raw
+    .split(',')
+    .map((s) => s.trim().replace(/\/$/, ''))
+    .filter(Boolean);
+  if (segments.length === 0) return fallback;
+  const withScheme =
+    segments.find((s) => /^https:\/\//i.test(s)) ??
+    segments.find((s) => /^http:\/\//i.test(s));
+  if (withScheme) return withScheme;
+  const first = segments[0];
+  return /^https?:\/\//i.test(first) ? first : `https://${first}`;
+}
+
 @Injectable()
 export class MercadoPagoPaymentsService {
   private readonly logger = new Logger(MercadoPagoPaymentsService.name);
@@ -53,9 +74,7 @@ export class MercadoPagoPaymentsService {
       throw new BadRequestException('Plano não encontrado ou grátis.');
     }
 
-    const front =
-      this.config.get<string>('FRONTEND_URL')?.replace(/\/$/, '') ||
-      'http://localhost:5173';
+    const front = primarySiteBaseUrl(this.config.get<string>('FRONTEND_URL'));
     const apiPublic =
       this.config.get<string>('API_PUBLIC_URL')?.replace(/\/$/, '') || '';
 
