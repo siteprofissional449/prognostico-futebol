@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { LoginResponse } from '../types';
+import type { AuthSession, LoginResponse } from '../types';
 
 export async function login(email: string, password: string): Promise<LoginResponse> {
   return api<LoginResponse>('/auth/login', {
@@ -13,4 +13,8 @@ export async function register(email: string, password: string): Promise<{ id: s
     method: 'POST',
     body: JSON.stringify({ email, password }),
   });
+}
+
+export async function getSession(): Promise<AuthSession> {
+  return api<AuthSession>('/auth/me', { method: 'GET' });
 }

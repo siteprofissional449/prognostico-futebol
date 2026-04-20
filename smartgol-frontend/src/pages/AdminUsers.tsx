@@ -22,6 +22,15 @@ const planOptions: { value: PlanType; label: string }[] = [
   { value: 'PREMIUM', label: 'Premium mensal (R$ 39,99/mês)' },
 ];
 
+function planTableLabel(code: string | undefined | null): string {
+  const c = String(code || 'FREE').toUpperCase();
+  if (c === 'FREE' || !c) return 'Grátis';
+  if (c === 'DAILY') return 'Diário';
+  if (c === 'WEEKLY') return 'Semanal';
+  if (c === 'MONTHLY' || c === 'PREMIUM') return 'Mensal';
+  return c;
+}
+
 function formatDate(iso: string | null) {
   if (!iso) return '—';
   try {
@@ -59,9 +68,13 @@ export function AdminUsers() {
 
   const openEdit = (u: AdminUserRow) => {
     setEditUser(u);
-    const raw = ((u.currentPlan?.code as string) || 'FREE') as PlanType;
-    const paid: PlanType[] = ['DAILY', 'WEEKLY', 'PREMIUM'];
-    setPlanCode(paid.includes(raw) ? raw : 'FREE');
+    const raw = String(u.currentPlan?.code || 'FREE').toUpperCase() as PlanType;
+    /** Na BD o mensal é MONTHLY; no select usamos PREMIUM (equivale no backend). */
+    let initial: PlanType = 'FREE';
+    if (raw === 'DAILY') initial = 'DAILY';
+    else if (raw === 'WEEKLY') initial = 'WEEKLY';
+    else if (raw === 'MONTHLY' || raw === 'PREMIUM') initial = 'PREMIUM';
+    setPlanCode(initial);
     if (u.planExpiresAt) {
       const d = new Date(u.planExpiresAt);
       setExpiresInput(d.toISOString().slice(0, 10));
@@ -86,7 +99,8 @@ export function AdminUsers() {
         }
         /** Sem data: não enviar o campo — o backend aplica o ciclo padrão (1d / 7d / 30d). */
       }
-      await patchAdminUser(editUser.id, body);
+      const updatedRow = await patchAdminUser(editUser.id, body);
+      setRows((prev) => prev.map((r) => (r.id === updatedRow.id ? updatedRow : r)));
       notifications.show({ color: 'green', message: 'Usuário atualizado.' });
       close();
       load();
@@ -127,7 +141,7 @@ export function AdminUsers() {
               <Table.Td>{u.email}</Table.Td>
               <Table.Td>
                 <Badge variant="light" color="green">
-                  {u.currentPlan?.code ?? 'FREE'}
+                  {planTableLabel(u.currentPlan?.code)}
                 </Badge>
               </Table.Td>
               <Table.Td>{formatDate(u.planExpiresAt)}</Table.Td>

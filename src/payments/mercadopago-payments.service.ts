@@ -27,6 +27,12 @@ const SYNC_PLAN_TIER: Record<SyncPlanCode, number> = {
   MONTHLY: 3,
 };
 
+/** Compara valor pago ao preço do plano (MP pode arredondar ou usar total_paid_amount ligeiramente diferente). */
+function paidMatchesPlanPrice(paid: number, expected: number): boolean {
+  const tol = Math.max(0.02, Math.min(3.0, expected * 0.06));
+  return Math.abs(paid - expected) <= tol;
+}
+
 /**
  * `FRONTEND_URL` pode listar várias origens separadas por vírgula (CORS em `main.ts`).
  * As `back_urls` do Mercado Pago precisam ser uma única URL absoluta; vírgula no meio
@@ -195,11 +201,52 @@ export class MercadoPagoPaymentsService {
     }
   }
 
+  /**
+   * Checkout Pro: a referência `sg:user:PLANO` fica na preferência; por vezes a ordem ou o
+   * pagamento vêm sem `external_reference` — recuperamos pela `preference_id`.
+   */
+  private async resolveSgReferenceFromPreference(
+    preferenceId: string | number | undefined,
+  ): Promise<string | undefined> {
+    if (preferenceId == null || String(preferenceId).trim() === '') {
+      return undefined;
+    }
+    try {
+      const prefApi = new Preference(this.mpConfig());
+      const pref = await prefApi.get({
+        preferenceId: String(preferenceId),
+      });
+      const ext = String(
+        (pref as { external_reference?: string }).external_reference ?? '',
+      ).trim();
+      return ext.startsWith('sg:') ? ext : undefined;
+    } catch (e) {
+      this.logger.warn(
+        `Leitura preference ${preferenceId}: ${e instanceof Error ? e.message : e}`,
+      );
+      return undefined;
+    }
+  }
+
+  private async resolvePaymentExternalReference(
+    pay: Record<string, unknown>,
+  ): Promise<string | undefined> {
+    const direct = String(pay.external_reference ?? '').trim();
+    if (direct.startsWith('sg:')) return direct;
+    const fromPref = await this.resolveSgReferenceFromPreference(
+      pay.preference_id as string | number | undefined,
+    );
+    return fromPref ?? (direct || undefined);
+  }
+
   /** Checkout Pro costuma notificar `merchant_order`; o `data.id` é da ordem, não do pagamento. */
   private async grantFromMerchantOrder(merchantOrderId: string): Promise<void> {
     const moApi = new MerchantOrder(this.mpConfig());
     const mo = await moApi.get({ merchantOrderId });
-    const ref = mo.external_reference?.trim();
+    let ref = mo.external_reference?.trim();
+    if (!ref?.startsWith('sg:')) {
+      ref = (await this.resolveSgReferenceFromPreference(mo.preference_id)) ?? ref;
+    }
     if (!ref?.startsWith('sg:')) {
       this.logger.warn(
         `Ordem MP ${merchantOrderId}: external_reference inválido: ${ref ?? '(vazio)'}`,
@@ -215,12 +262,18 @@ export class MercadoPagoPaymentsService {
       );
       return;
     }
-    const paidFromOrder = Number(mo.paid_amount ?? 0);
-    const sumApproved = approved.reduce(
-      (s, p) => s + Number(p.total_paid_amount ?? p.transaction_amount ?? 0),
-      0,
-    );
-    const paidTotal = paidFromOrder > 0.01 ? paidFromOrder : sumApproved;
+    let paidTotal: number;
+    if (approved.length === 1) {
+      const p0 = approved[0];
+      paidTotal = Number(p0.total_paid_amount ?? p0.transaction_amount ?? 0);
+    } else {
+      const paidFromOrder = Number(mo.paid_amount ?? 0);
+      const sumApproved = approved.reduce(
+        (s, p) => s + Number(p.total_paid_amount ?? p.transaction_amount ?? 0),
+        0,
+      );
+      paidTotal = paidFromOrder > 0.01 ? paidFromOrder : sumApproved;
+    }
     await this.grantFromExternalReference(ref, paidTotal, `ordem ${merchantOrderId}`);
   }
 
@@ -231,12 +284,18 @@ export class MercadoPagoPaymentsService {
       this.logger.log(`Pagamento ${paymentId} status=${pay.status} — sem liberação.`);
       return;
     }
-    const ref = pay.external_reference?.trim();
+    const payObj = pay as unknown as Record<string, unknown>;
+    const ref = (await this.resolvePaymentExternalReference(payObj))?.trim();
     if (!ref?.startsWith('sg:')) {
-      this.logger.warn(`external_reference inválido: ${ref}`);
+      this.logger.warn(
+        `Pagamento ${paymentId}: external_reference inválido após preference: ${ref ?? '(vazio)'}`,
+      );
       return;
     }
-    const paid = Number(pay.transaction_amount);
+    const td = payObj.transaction_details as Record<string, unknown> | undefined;
+    const paid = Number(
+      td?.total_paid_amount ?? payObj.transaction_amount ?? 0,
+    );
     await this.grantFromExternalReference(ref, paid, `pagamento ${paymentId}`);
   }
 
@@ -255,7 +314,7 @@ export class MercadoPagoPaymentsService {
     if (!plan) return;
 
     const expected = Number(plan.price);
-    if (Math.abs(paidAmount - expected) > 0.02) {
+    if (!paidMatchesPlanPrice(paidAmount, expected)) {
       this.logger.warn(
         `Valor divergente (${logLabel}): pago ${paidAmount}, esperado ${expected} (plano ${canonical}).`,
       );
@@ -334,8 +393,11 @@ export class MercadoPagoPaymentsService {
         });
 
       for (const r of approved) {
-        const paid = Number(r.transaction_amount);
-        if (Math.abs(paid - expected) > 0.02) continue;
+        const td = r.transaction_details as { total_paid_amount?: number } | undefined;
+        const paid = Number(
+          td?.total_paid_amount ?? r.transaction_amount ?? 0,
+        );
+        if (!paidMatchesPlanPrice(paid, expected)) continue;
         const approvedAt = new Date(
           String(r.date_approved ?? r.date_created ?? 0),
         ).getTime();

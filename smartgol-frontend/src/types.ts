@@ -84,6 +84,12 @@ export interface LoginResponse {
   isAdmin: boolean;
 }
 
+/** Resposta de GET /auth/me (sem token novo). */
+export type AuthSession = Pick<
+  LoginResponse,
+  'plan' | 'userAccessTier' | 'expiresAt' | 'isAdmin'
+>;
+
 export interface AdminStats {
   userCount: number;
   predictionCount: number;

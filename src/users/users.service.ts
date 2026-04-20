@@ -200,9 +200,16 @@ export class UsersService {
     if (!user) throw new NotFoundException('Usuário não encontrado');
 
     const paidCodes = ['DAILY', 'WEEKLY', 'MONTHLY', 'PREMIUM'];
+    /**
+     * Usar `update()` em vez de mutar a entidade carregada + `save()` evita o TypeORM
+     * manter `currentPlan` antigo em memória; o painel admin recebia o plano errado
+     * no JSON após o PATCH.
+     */
     if (dto.planCode === 'FREE') {
-      user.currentPlanId = null;
-      user.planExpiresAt = null;
+      await this.userRepo.update(
+        { id: userId },
+        { currentPlanId: null, planExpiresAt: null },
+      );
     } else if (dto.planCode && paidCodes.includes(dto.planCode)) {
       const normalizedCode =
         dto.planCode === 'PREMIUM' ? 'MONTHLY' : dto.planCode;
@@ -210,22 +217,26 @@ export class UsersService {
         where: { code: normalizedCode },
       });
       if (!plan) throw new NotFoundException('Plano inválido');
-      user.currentPlanId = plan.id;
       const hasCustomExpiry =
         dto.planExpiresAt != null && String(dto.planExpiresAt).trim() !== '';
-      if (hasCustomExpiry) {
-        user.planExpiresAt = new Date(dto.planExpiresAt as string);
-      } else {
-        /** Sem data = mesmo comportamento do pagamento: ciclo padrão a partir de agora. */
-        user.planExpiresAt = this.calculateExpiration(normalizedCode, new Date());
-      }
+      const planExpiresAt = hasCustomExpiry
+        ? new Date(dto.planExpiresAt as string)
+        : this.calculateExpiration(normalizedCode, new Date());
+      await this.userRepo.update(
+        { id: userId },
+        { currentPlanId: plan.id, planExpiresAt },
+      );
     } else if (dto.planExpiresAt !== undefined) {
-      user.planExpiresAt = dto.planExpiresAt
-        ? new Date(dto.planExpiresAt)
-        : null;
+      await this.userRepo.update(
+        { id: userId },
+        {
+          planExpiresAt: dto.planExpiresAt
+            ? new Date(dto.planExpiresAt)
+            : null,
+        },
+      );
     }
 
-    await this.userRepo.save(user);
     const updated = await this.findById(userId);
     if (!updated) throw new NotFoundException('Usuário não encontrado');
     return updated;

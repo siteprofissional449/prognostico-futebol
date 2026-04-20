@@ -1,4 +1,11 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useEffect,
+  type ReactNode,
+} from 'react';
 import type { PlanType } from '../types';
 import * as authApi from '../api/auth';
 
@@ -27,6 +34,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAdmin, setIsAdmin] = useState<boolean>(() =>
     localStorage.getItem(ADMIN_KEY) === 'true'
   );
+
+  /** Após pagamento (ou admin), o plano na BD muda mas o localStorage ainda tinha o valor do login. */
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    authApi
+      .getSession()
+      .then((s) => {
+        if (cancelled) return;
+        setPlanState(s.plan);
+        localStorage.setItem(PLAN_KEY, s.plan);
+        setIsAdmin(!!s.isAdmin);
+        if (s.isAdmin) localStorage.setItem(ADMIN_KEY, 'true');
+        else localStorage.removeItem(ADMIN_KEY);
+      })
+      .catch(() => {
+        /* token expirado ou API indisponível — mantém estado local */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
 
   const setPlan = useCallback((p: PlanType) => {
     setPlanState(p);
