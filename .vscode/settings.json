@@ -1,0 +1,20 @@
+{
+  "sqltools.useNodeRuntime": true,
+  "sqltools.connections": [
+    {
+      "name": "Railway PostgreSQL",
+      "driver": "PostgreSQL",
+      "server": "${env:RAILWAY_PGHOST}",
+      "port": "${env:RAILWAY_PGPORT}",
+      "database": "${env:RAILWAY_PGDATABASE}",
+      "username": "${env:RAILWAY_PGUSER}",
+      "password": "${env:RAILWAY_PGPASSWORD}",
+      "connectionTimeout": 45,
+      "pgOptions": {
+        "ssl": {
+          "rejectUnauthorized": false
+        }
+      }
+    }
+  ]
+}
