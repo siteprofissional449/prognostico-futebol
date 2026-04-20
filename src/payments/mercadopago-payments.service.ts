@@ -17,6 +17,16 @@ import { UsersService } from '../users/users.service';
 const PAID_PLAN_CODES = ['DAILY', 'WEEKLY', 'MONTHLY', 'PREMIUM'] as const;
 type PaidPlanCode = (typeof PAID_PLAN_CODES)[number];
 
+const SYNC_PLAN_CODES = ['DAILY', 'WEEKLY', 'MONTHLY'] as const;
+type SyncPlanCode = (typeof SYNC_PLAN_CODES)[number];
+
+/** Ordem de tier para desempate quando duas compras têm o mesmo instante aprovado. */
+const SYNC_PLAN_TIER: Record<SyncPlanCode, number> = {
+  DAILY: 1,
+  WEEKLY: 2,
+  MONTHLY: 3,
+};
+
 /**
  * `FRONTEND_URL` pode listar várias origens separadas por vírgula (CORS em `main.ts`).
  * As `back_urls` do Mercado Pago precisam ser uma única URL absoluta; vírgula no meio
@@ -275,9 +285,19 @@ export class MercadoPagoPaymentsService {
     }
     let synced = false;
     const paymentApi = new Payment(this.mpConfig());
-    const codes = ['DAILY', 'WEEKLY', 'MONTHLY'] as const;
+    /**
+     * Antes o sync percorria DAILY → WEEKLY → MONTHLY e concedia o primeiro match.
+     * Um pagamento diário antigo (ainda aprovado na API) era aplicado antes do
+     * semanal/mensal recém-pago. Agora reunimos candidatos e aplicamos o plano
+     * da compra mais recente (desempate: plano de maior tier).
+     */
+    const candidates: Array<{
+      code: SyncPlanCode;
+      approvedAt: number;
+      paymentId: string;
+    }> = [];
 
-    for (const code of codes) {
+    for (const code of SYNC_PLAN_CODES) {
       const ref = `sg:${userId}:${code}`;
       let searchRes: Awaited<ReturnType<Payment['search']>>;
       try {
@@ -316,14 +336,29 @@ export class MercadoPagoPaymentsService {
       for (const r of approved) {
         const paid = Number(r.transaction_amount);
         if (Math.abs(paid - expected) > 0.02) continue;
-        await this.usersService.grantSubscriptionByPlanCode(userId, code);
-        synced = true;
-        this.logger.log(
-          `sync MP: plano ${code} liberado para ${userId} (pagamento ${r.id ?? 'n/d'}).`,
-        );
+        const approvedAt = new Date(
+          String(r.date_approved ?? r.date_created ?? 0),
+        ).getTime();
+        candidates.push({
+          code,
+          approvedAt,
+          paymentId: String(r.id ?? ''),
+        });
         break;
       }
-      if (synced) break;
+    }
+
+    if (candidates.length > 0) {
+      candidates.sort((a, b) => {
+        if (b.approvedAt !== a.approvedAt) return b.approvedAt - a.approvedAt;
+        return SYNC_PLAN_TIER[b.code] - SYNC_PLAN_TIER[a.code];
+      });
+      const best = candidates[0];
+      await this.usersService.grantSubscriptionByPlanCode(userId, best.code);
+      synced = true;
+      this.logger.log(
+        `sync MP: plano ${best.code} liberado para ${userId} (pagamento ${best.paymentId || 'n/d'}, entre ${candidates.length} candidato(s)).`,
+      );
     }
 
     const access = await this.usersService.getUserAccessContext(userId);
