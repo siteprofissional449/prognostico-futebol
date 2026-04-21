@@ -6,7 +6,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, Repository } from 'typeorm';
+import { Between, In, Repository } from 'typeorm';
 import { Prediction, PlanType } from './prediction.entity';
 import {
   PredictionsHistoryDayDto,
@@ -139,7 +139,7 @@ export class PredictionsService {
     totalGoals: number,
   ): 'GREEN' | 'RED' | 'PENDING' {
     if (!market) return 'PENDING';
-    if (market === 'OVER_25') {
+    if (market === 'OVER_25' || market === 'OVER_2') {
       if (!Number.isFinite(totalGoals)) return 'PENDING';
       return totalGoals > 2 ? 'GREEN' : 'RED';
     }
@@ -331,7 +331,49 @@ export class PredictionsService {
     return this.predictionRepo.save(entity);
   }
 
-  /** Evita duplicar prognóstico para o mesmo jogo no mesmo dia civil. */
+  /** Evita duplicar o mesmo mercado no mesmo jogo e dia. */
+  async existsForMatchMarketOnDate(
+    matchId: string,
+    predictionDate: string,
+    market: string,
+  ): Promise<boolean> {
+    const n = await this.predictionRepo.count({
+      where: { matchId, predictionDate, market },
+    });
+    return n > 0;
+  }
+
+  /** No máximo um palpite 1X2 por jogo/dia. */
+  async exists1x2ForMatchOnDate(
+    matchId: string,
+    predictionDate: string,
+  ): Promise<boolean> {
+    const n = await this.predictionRepo.count({
+      where: {
+        matchId,
+        predictionDate,
+        market: In(['HOME_WIN', 'DRAW', 'AWAY_WIN']),
+      },
+    });
+    return n > 0;
+  }
+
+  /** Já existe palpite OVER_25 ou OVER_2 para o jogo neste dia. */
+  async existsAnyOverGoalsLine(
+    matchId: string,
+    predictionDate: string,
+  ): Promise<boolean> {
+    const n = await this.predictionRepo.count({
+      where: {
+        matchId,
+        predictionDate,
+        market: In(['OVER_25', 'OVER_2']),
+      },
+    });
+    return n > 0;
+  }
+
+  /** @deprecated Prefer existsForMatchMarketOnDate — mantido para scripts legados. */
   async existsForMatchOnDate(
     matchId: string,
     predictionDate: string,

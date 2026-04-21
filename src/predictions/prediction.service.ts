@@ -18,6 +18,7 @@ export type PredictionMarket =
   | 'DRAW'
   | 'AWAY_WIN'
   | 'OVER_25'
+  | 'OVER_2'
   | 'UNDER_25'
   | 'CORNERS_OVER'
   | 'CORNERS_UNDER';
@@ -27,8 +28,19 @@ const MIN_PUBLISHED_ODD =
   Number(process.env.MIN_PREDICTION_ODD) > 1
     ? Number(process.env.MIN_PREDICTION_ODD)
     : 1.65;
-const BATCH_MAX_MATCHES = 22;
-const BATCH_MAX_PICKS = 8;
+const BATCH_MAX_MATCHES =
+  Number(process.env.BATCH_MAX_MATCHES) > 0
+    ? Number(process.env.BATCH_MAX_MATCHES)
+    : 120;
+const BATCH_MAX_PICKS =
+  Number(process.env.BATCH_MAX_PICKS) > 0
+    ? Number(process.env.BATCH_MAX_PICKS)
+    : 50;
+/** Meta mínima de palpites gravados por dia (lote + por jogo + preenchimento por odds). */
+const MIN_DAILY_PREDICTIONS =
+  Number(process.env.MIN_DAILY_PREDICTIONS) > 0
+    ? Number(process.env.MIN_DAILY_PREDICTIONS)
+    : 35;
 const MIN_CONFIDENCE_AI = 58;
 
 interface AiBatchPick {
@@ -137,19 +149,18 @@ export class PredictionService {
     let skippedErrors = 0;
     let aiErrorSample: string | null = null;
 
-    let batchHadPicks = false;
     if (this.openAiKey) {
       try {
         const batch = await this.generateConservativeBatchWithAi(matches, targetDate);
-        if (batch.length > 0) batchHadPicks = true;
         for (const row of batch) {
           const mid = String(row.matchId);
           try {
-            if (await this.predictionsService.existsForMatchOnDate(mid, targetDate)) {
-              skippedDuplicate += 1;
-              continue;
-            }
-            pending.push(row);
+            const r = await this.tryAppendPredictionRow(
+              row,
+              targetDate,
+              pending,
+            );
+            if (r === 'skipped') skippedDuplicate += 1;
           } catch (e) {
             skippedErrors += 1;
             this.logger.error(
@@ -166,16 +177,11 @@ export class PredictionService {
       }
     }
 
-    if (!batchHadPicks) {
+    if (pending.length < MIN_DAILY_PREDICTIONS) {
       for (const m of matches) {
+        if (pending.length >= MIN_DAILY_PREDICTIONS) break;
         const mid = String(m.id);
         try {
-          if (await this.predictionsService.existsForMatchOnDate(mid, targetDate)) {
-            this.logger.debug(`Jogo ${mid}: prognóstico já existe; ignorado.`);
-            skippedDuplicate += 1;
-            continue;
-          }
-
           const oddsOk = this.hasUsableOdds(m);
           let core: PredictionCore;
           if (oddsOk) {
@@ -254,7 +260,7 @@ export class PredictionService {
                 ? core.probDraw
                 : core.probAway;
 
-          pending.push({
+          const row: Partial<Prediction> = {
             matchId: mid,
             homeTeam: m.homeTeam?.name ?? '—',
             awayTeam: m.awayTeam?.name ?? '—',
@@ -270,7 +276,9 @@ export class PredictionService {
             analysis: core.analysis,
             minPlan: PlanType.FREE,
             predictionDate: targetDate,
-          });
+          };
+          const ar = await this.tryAppendPredictionRow(row, targetDate, pending);
+          if (ar === 'skipped') skippedDuplicate += 1;
         } catch (e) {
           skippedErrors += 1;
           this.logger.error(
@@ -279,6 +287,13 @@ export class PredictionService {
         }
       }
     }
+
+    await this.fillSecondaryMarketsOddsOnly(
+      matches,
+      targetDate,
+      pending,
+      MIN_DAILY_PREDICTIONS,
+    );
 
     const tiered = this.applyFreeVsPaidTiers(pending);
     const saved: Prediction[] = [];
@@ -524,11 +539,13 @@ export class PredictionService {
       'Deves devolver APENAS JSON (objeto com chave "picks" array).',
       '',
       'Regras:',
-      `- Escolhe no máximo ${BATCH_MAX_PICKS} jogos do dia com maior probabilidade de acerto (não uses todos).`,
+      `- Escolhe até ${BATCH_MAX_PICKS} jogos do dia com boa leitura (podes usar muitos jogos diferentes).`,
       '- Prioriza palpites seguros; evita confrontos muito equilibrados sem valor claro.',
       '- Para cada escolha, UM mercado entre EXATAMENTE estes códigos:',
-      '  HOME_WIN | DRAW | AWAY_WIN | OVER_25 | UNDER_25 | CORNERS_OVER | CORNERS_UNDER',
-      '  (OVER_25 = mais de 2.5 golos; UNDER_25 = menos de 2.5; CORNERS_* = mais/menos cantos na linha disponível nas odds).',
+      '  HOME_WIN | DRAW | AWAY_WIN | OVER_25 | OVER_2 | UNDER_25 | CORNERS_OVER | CORNERS_UNDER',
+      '  (OVER_25 = mais de 2.5 golos; OVER_2 = mais de 2 golos linha 2.0 quando existir odd; UNDER_25 = menos de 2.5; CORNERS_* = cantos).',
+      `- Objetivo: pelo menos ${Math.min(MIN_DAILY_PREDICTIONS, BATCH_MAX_PICKS)} picks quando houver partidas e odds suficientes (até ${BATCH_MAX_PICKS} no máximo).`,
+      '- Mistura os mercados: inclui vários OVER_25, vários UNDER_25 e vários OVER_2 (não devolvas só 1X2 nem só um tipo de total).',
       '- Só podes escolher um mercado se a odd correspondente em "odds" existir e for >= ' +
         MIN_PUBLISHED_ODD +
         '. Se não houver odd na API para esse mercado, não uses esse mercado nessa partida.',
@@ -716,6 +733,12 @@ export class PredictionService {
       CORNERS_UNDER: 'CORNERS_UNDER',
       CORNERSUNDER: 'CORNERS_UNDER',
       MENOS_ESCANTEIOS: 'CORNERS_UNDER',
+      OVER_2: 'OVER_2',
+      OVER2: 'OVER_2',
+      O2: 'OVER_2',
+      MAIS_DE_2: 'OVER_2',
+      MAIS_2_GOLS: 'OVER_2',
+      MAIS_2: 'OVER_2',
     };
     return aliases[t] ?? null;
   }
@@ -865,6 +888,224 @@ export class PredictionService {
       return 'AWAY_WIN';
     }
     return null;
+  }
+
+  private pendingHas1x2ForMatch(
+    pending: Partial<Prediction>[],
+    mid: string,
+  ): boolean {
+    return pending.some(
+      (p) =>
+        String(p.matchId) === String(mid) &&
+        (p.market === 'HOME_WIN' ||
+          p.market === 'DRAW' ||
+          p.market === 'AWAY_WIN'),
+    );
+  }
+
+  private pendingGoalsSideForMatch(
+    pending: Partial<Prediction>[],
+    mid: string,
+  ): 'OVER' | 'UNDER' | null {
+    for (const p of pending) {
+      if (String(p.matchId) !== String(mid)) continue;
+      if (p.market === 'OVER_25' || p.market === 'OVER_2') return 'OVER';
+      if (p.market === 'UNDER_25') return 'UNDER';
+    }
+    return null;
+  }
+
+  private pendingHasOverGoalsLine(
+    pending: Partial<Prediction>[],
+    mid: string,
+  ): boolean {
+    return pending.some(
+      (p) =>
+        String(p.matchId) === String(mid) &&
+        (p.market === 'OVER_25' || p.market === 'OVER_2'),
+    );
+  }
+
+  private pendingCornersSideForMatch(
+    pending: Partial<Prediction>[],
+    mid: string,
+  ): 'OVER' | 'UNDER' | null {
+    for (const p of pending) {
+      if (String(p.matchId) !== String(mid)) continue;
+      if (p.market === 'CORNERS_OVER') return 'OVER';
+      if (p.market === 'CORNERS_UNDER') return 'UNDER';
+    }
+    return null;
+  }
+
+  /**
+   * Garante um palpite por (jogo, mercado), no máximo um 1X2 por jogo,
+   * e evita OVER vs UNDER de golos (ou duas linhas OVER) no mesmo jogo.
+   */
+  private async tryAppendPredictionRow(
+    row: Partial<Prediction>,
+    targetDate: string,
+    pending: Partial<Prediction>[],
+  ): Promise<'added' | 'skipped'> {
+    const mid = String(row.matchId ?? '');
+    const mkt = row.market as PredictionMarket;
+    if (!mid || !mkt) return 'skipped';
+
+    if (
+      pending.some(
+        (p) => String(p.matchId) === mid && String(p.market) === String(mkt),
+      )
+    ) {
+      return 'skipped';
+    }
+
+    if (
+      await this.predictionsService.existsForMatchMarketOnDate(
+        mid,
+        targetDate,
+        mkt,
+      )
+    ) {
+      return 'skipped';
+    }
+
+    if (
+      (mkt === 'HOME_WIN' || mkt === 'DRAW' || mkt === 'AWAY_WIN') &&
+      ((await this.predictionsService.exists1x2ForMatchOnDate(mid, targetDate)) ||
+        this.pendingHas1x2ForMatch(pending, mid))
+    ) {
+      return 'skipped';
+    }
+
+    if (mkt === 'UNDER_25') {
+      if (
+        this.pendingGoalsSideForMatch(pending, mid) === 'OVER' ||
+        (await this.predictionsService.existsAnyOverGoalsLine(mid, targetDate))
+      ) {
+        return 'skipped';
+      }
+    }
+
+    if (mkt === 'OVER_25' || mkt === 'OVER_2') {
+      if (this.pendingGoalsSideForMatch(pending, mid) === 'UNDER') {
+        return 'skipped';
+      }
+      if (
+        await this.predictionsService.existsForMatchMarketOnDate(
+          mid,
+          targetDate,
+          'UNDER_25',
+        )
+      ) {
+        return 'skipped';
+      }
+      if (
+        this.pendingHasOverGoalsLine(pending, mid) ||
+        (await this.predictionsService.existsAnyOverGoalsLine(mid, targetDate))
+      ) {
+        return 'skipped';
+      }
+    }
+
+    if (mkt === 'CORNERS_OVER') {
+      if (this.pendingCornersSideForMatch(pending, mid) === 'UNDER') {
+        return 'skipped';
+      }
+      if (
+        await this.predictionsService.existsForMatchMarketOnDate(
+          mid,
+          targetDate,
+          'CORNERS_UNDER',
+        )
+      ) {
+        return 'skipped';
+      }
+    }
+    if (mkt === 'CORNERS_UNDER') {
+      if (this.pendingCornersSideForMatch(pending, mid) === 'OVER') {
+        return 'skipped';
+      }
+      if (
+        await this.predictionsService.existsForMatchMarketOnDate(
+          mid,
+          targetDate,
+          'CORNERS_OVER',
+        )
+      ) {
+        return 'skipped';
+      }
+    }
+
+    pending.push(row);
+    return 'added';
+  }
+
+  /** Completa a meta mínima com mercados secundários usando só odds da API. */
+  private async fillSecondaryMarketsOddsOnly(
+    matches: ApiMatch[],
+    targetDate: string,
+    pending: Partial<Prediction>[],
+    minCount: number,
+  ): Promise<void> {
+    const sequence: PredictionMarket[] = [
+      'OVER_25',
+      'UNDER_25',
+      'OVER_2',
+      'UNDER_25',
+      'OVER_25',
+      'OVER_2',
+      'CORNERS_OVER',
+      'CORNERS_UNDER',
+    ];
+    let seqPos = 0;
+    let guard = 0;
+    while (pending.length < minCount && guard < 2000) {
+      guard++;
+      let addedThisPass = false;
+      for (const m of matches) {
+        if (pending.length >= minCount) return;
+        const market = sequence[seqPos % sequence.length];
+        seqPos += 1;
+        const odd = this.resolveOddForMarket(m, market);
+        if (odd == null || odd < MIN_PUBLISHED_ODD) continue;
+        const mid = String(m.id);
+        const triplet = this.impliedTripletFrom1x2IfAny(m);
+        const probability = Math.min(
+          0.9,
+          Math.max(MIN_CONFIDENCE_AI / 100, 1 / odd),
+        );
+        const label =
+          market === 'OVER_25'
+            ? 'mais de 2.5 gols'
+            : market === 'UNDER_25'
+              ? 'menos de 2.5 gols'
+              : market === 'OVER_2'
+                ? 'mais de 2 gols (linha 2.0)'
+                : market === 'CORNERS_OVER'
+                  ? 'mais escanteios'
+                  : 'menos escanteios';
+        const row: Partial<Prediction> = {
+          matchId: mid,
+          homeTeam: m.homeTeam?.name ?? '—',
+          awayTeam: m.awayTeam?.name ?? '—',
+          league: m.competition?.name ?? '—',
+          startTime: new Date(m.utcDate),
+          market,
+          probability,
+          odd,
+          probHome: triplet?.h ?? null,
+          probDraw: triplet?.d ?? null,
+          probAway: triplet?.a ?? null,
+          bestBet: market,
+          analysis: `Palpite automático em ${label} (odd ${odd.toFixed(2)} na API).`,
+          minPlan: PlanType.FREE,
+          predictionDate: targetDate,
+        };
+        const r = await this.tryAppendPredictionRow(row, targetDate, pending);
+        if (r === 'added') addedThisPass = true;
+      }
+      if (!addedThisPass) break;
+    }
   }
 
   private normalizeTriplet(

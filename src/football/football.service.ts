@@ -175,7 +175,8 @@ export class FootballService {
 
   /**
    * 1X2 + totais 2.5 gols + cantos (quando a API devolve mercados com outcomes).
-   * Chaves: HOME_WIN, DRAW, AWAY_WIN, OVER_25, UNDER_25, CORNERS_OVER, CORNERS_UNDER.
+   * Chaves: HOME_WIN, DRAW, AWAY_WIN, OVER_25, OVER_2, UNDER_25, CORNERS_OVER, CORNERS_UNDER.
+   * OVER_2 = linha "mais de 2 golos" (ex.: Over 2.0 / O2), distinta de OVER_25 (2.5).
    */
   getExtendedOddsMap(match: ApiMatch): Record<string, number | null> {
     const base = this.extractOddsMap(match);
@@ -184,6 +185,7 @@ export class FootballService {
       DRAW: base.DRAW,
       AWAY_WIN: base.AWAY_WIN,
       OVER_25: null,
+      OVER_2: null,
       UNDER_25: null,
       CORNERS_OVER: null,
       CORNERS_UNDER: null,
@@ -200,17 +202,26 @@ export class FootballService {
         const price = parseFloat(String(o.odds).replace(',', '.'));
         if (!Number.isFinite(price) || price < 1.01) continue;
         const u = label.toUpperCase();
-        if (
-          (u.includes('OVER') && (u.includes('2.5') || u.includes('2,5'))) ||
-          u === 'O2.5'
-        ) {
+        const has25 = u.includes('2.5') || u.includes('2,5');
+        const has15 = u.includes('1.5') || u.includes('1,5');
+        const has35 = u.includes('3.5') || u.includes('3,5');
+        if ((u.includes('OVER') && has25) || u === 'O2.5' || u === 'OVER2.5') {
           out.OVER_25 =
             out.OVER_25 == null ? price : Math.max(out.OVER_25, price);
         }
         if (
-          (u.includes('UNDER') && (u.includes('2.5') || u.includes('2,5'))) ||
-          u === 'U2.5'
+          !has25 &&
+          !has15 &&
+          !has35 &&
+          (u === 'O2' ||
+            u.includes('OVER 2') ||
+            u.includes('OVER2') ||
+            (u.includes('OVER') && u.includes(' 2') && !u.includes('2.5') && !u.includes('2,5')) ||
+            (u.includes('MAIS') && u.includes('2') && !has25))
         ) {
+          out.OVER_2 = out.OVER_2 == null ? price : Math.max(out.OVER_2, price);
+        }
+        if ((u.includes('UNDER') && has25) || u === 'U2.5' || u === 'UNDER2.5') {
           out.UNDER_25 =
             out.UNDER_25 == null ? price : Math.max(out.UNDER_25, price);
         }
