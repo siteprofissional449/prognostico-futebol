@@ -1,10 +1,12 @@
 :root {
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
+  /* Design tokens — fundo / cartões / acento (SaaS premium) */
+  --app-bg: #0b0f14;
+  --app-surface: #111827;
+  --app-border: rgba(255, 255, 255, 0.06);
+  --app-text: #e5e7eb;
+  --app-text-muted: #9ca3af;
+  --app-accent: #22c55e;
   color-scheme: dark;
-  color: #e4e4e7;
-  background-color: #0f0f12;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -15,6 +17,11 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--app-text);
+  background: var(--app-bg);
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 
 #root {
@@ -22,11 +29,13 @@ body {
 }
 
 a {
-  color: #22c55e;
+  color: var(--app-accent);
   text-decoration: none;
+  font-weight: 500;
+  transition: color 0.15s ease;
 }
 
 a:hover {
   color: #4ade80;
-  text-decoration: underline;
+  text-decoration: none;
 }

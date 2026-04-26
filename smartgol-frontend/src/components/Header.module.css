@@ -3,8 +3,8 @@
   top: 0;
   z-index: 40;
   padding: 0.65rem 1rem;
-  background: var(--mantine-color-dark-7);
-  border-bottom: 1px solid var(--mantine-color-dark-4);
+  background: #111827;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   backdrop-filter: blur(6px);
 }
 

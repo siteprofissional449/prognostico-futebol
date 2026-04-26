@@ -21,10 +21,10 @@ export function ResultCard({
   return (
     <Card
       className={classes.card}
-      shadow="sm"
+      shadow="none"
       padding="md"
       radius="md"
-      withBorder
+      withBorder={false}
       style={{ cursor: isClickable ? 'pointer' : undefined }}
       onClick={onClick}
     >

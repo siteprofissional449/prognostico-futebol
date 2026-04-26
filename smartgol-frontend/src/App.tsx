@@ -1,53 +1,68 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { MantineProvider, createTheme } from '@mantine/core';
+import { Center, Loader, MantineProvider } from '@mantine/core';
+import { appTheme } from './theme/appTheme';
 import { Notifications } from '@mantine/notifications';
 import { AuthProvider } from './contexts/AuthContext';
 import { Layout } from './components/Layout';
-import { Home } from './pages/Home';
-import { Login } from './pages/Login';
-import { Register } from './pages/Register';
 import { AdminRouteGuard } from './components/AdminRouteGuard';
 import { AdminShell } from './components/AdminShell';
-import { AdminDashboard } from './pages/AdminDashboard';
-import { AdminUsers } from './pages/AdminUsers';
-import { AdminPrognosticos } from './pages/AdminPrognosticos';
-import { Premium } from './pages/Premium';
-import { Planos } from './pages/Planos';
-import { Prognosticos } from './pages/Prognosticos';
-import { HistoricoAcertos } from './pages/HistoricoAcertos';
 import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
 import './index.css';
 
-const theme = createTheme({
-  primaryColor: 'green',
-});
+const Home = lazy(() => import('./pages/Home').then((m) => ({ default: m.Home })));
+const Login = lazy(() => import('./pages/Login').then((m) => ({ default: m.Login })));
+const Register = lazy(() => import('./pages/Register').then((m) => ({ default: m.Register })));
+const Premium = lazy(() => import('./pages/Premium').then((m) => ({ default: m.Premium })));
+const Planos = lazy(() => import('./pages/Planos').then((m) => ({ default: m.Planos })));
+const Prognosticos = lazy(() => import('./pages/Prognosticos').then((m) => ({ default: m.Prognosticos })));
+const HistoricoAcertos = lazy(() =>
+  import('./pages/HistoricoAcertos').then((m) => ({ default: m.HistoricoAcertos })),
+);
+const AdminDashboard = lazy(() =>
+  import('./pages/AdminDashboard').then((m) => ({ default: m.AdminDashboard })),
+);
+const AdminUsers = lazy(() => import('./pages/AdminUsers').then((m) => ({ default: m.AdminUsers })));
+const AdminPrognosticos = lazy(() =>
+  import('./pages/AdminPrognosticos').then((m) => ({ default: m.AdminPrognosticos })),
+);
+
+function PageLoadingFallback() {
+  return (
+    <Center mih="45vh" py="xl">
+      <Loader type="oval" size="md" color="#22C55E" />
+    </Center>
+  );
+}
 
 function App() {
   return (
-    <MantineProvider theme={theme} defaultColorScheme="dark">
+    <MantineProvider theme={appTheme} defaultColorScheme="dark">
       <Notifications position="top-right" />
       <AuthProvider>
         <BrowserRouter>
-          <Routes>
-            <Route element={<Layout />}>
-              <Route index element={<Home />} />
-              <Route path="login" element={<Login />} />
-              <Route path="register" element={<Register />} />
-              <Route path="premium" element={<Premium />} />
-              <Route path="planos" element={<Planos />} />
-              <Route path="prognosticos" element={<Prognosticos />} />
-              <Route path="historico" element={<HistoricoAcertos />} />
-              <Route path="admin" element={<AdminRouteGuard />}>
-                <Route element={<AdminShell />}>
-                  <Route index element={<AdminDashboard />} />
-                  <Route path="usuarios" element={<AdminUsers />} />
-                  <Route path="prognosticos" element={<AdminPrognosticos />} />
+          <Suspense fallback={<PageLoadingFallback />}>
+            <Routes>
+              <Route element={<Layout />}>
+                <Route index element={<Home />} />
+                <Route path="login" element={<Login />} />
+                <Route path="register" element={<Register />} />
+                <Route path="premium" element={<Premium />} />
+                <Route path="planos" element={<Planos />} />
+                <Route path="prognosticos" element={<Prognosticos />} />
+                <Route path="historico" element={<HistoricoAcertos />} />
+                <Route path="admin" element={<AdminRouteGuard />}>
+                  <Route element={<AdminShell />}>
+                    <Route index element={<AdminDashboard />} />
+                    <Route path="usuarios" element={<AdminUsers />} />
+                    <Route path="prognosticos" element={<AdminPrognosticos />} />
+                  </Route>
                 </Route>
+                <Route path="*" element={<Navigate to="/" replace />} />
               </Route>
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Route>
-          </Routes>
+            </Routes>
+          </Suspense>
         </BrowserRouter>
       </AuthProvider>
     </MantineProvider>
