@@ -1,11 +1,13 @@
-import { memo, useState, useEffect, useCallback, useMemo } from 'react';
-import { Text, Group, Loader, Alert, ThemeIcon, Badge } from '@mantine/core';
+import { memo, useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { Text, Group, Alert, ThemeIcon, Badge, Skeleton } from '@mantine/core';
 import { IconBroadcast } from '@tabler/icons-react';
 import { getLiveMatches } from '../api/football';
 import type { LiveMatchInfo } from '../types';
+import { reportError } from '../monitoring/sentry';
 import styles from './LiveMatchesSection.module.css';
 
 const POLL_MS = 60_000;
+const MAX_BACKOFF_MS = 4 * 60_000;
 
 type Props = {
   onMatchClick?: (matchId: number) => void;
@@ -16,16 +18,36 @@ function LiveMatchesSectionInner({ onMatchClick }: Props) {
   const [refreshedAt, setRefreshedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const inFlightRef = useRef(false);
+  const retryRef = useRef(0);
+  const timerRef = useRef<number | null>(null);
 
   const load = useCallback(() => {
+    if (inFlightRef.current) return Promise.resolve();
+    inFlightRef.current = true;
     return getLiveMatches()
       .then((res) => {
         setItems(Array.isArray(res.items) ? res.items : []);
         setRefreshedAt(res.refreshedAt || null);
         setError(null);
+        retryRef.current = 0;
+        if (timerRef.current) window.clearTimeout(timerRef.current);
+        timerRef.current = window.setTimeout(() => {
+          void load();
+        }, POLL_MS);
       })
       .catch((e) => {
         setError(e?.message || 'Sem dados ao vivo.');
+        reportError(e, 'live-matches-poll');
+        retryRef.current += 1;
+        const backoff = Math.min(POLL_MS * 2 ** retryRef.current, MAX_BACKOFF_MS);
+        if (timerRef.current) window.clearTimeout(timerRef.current);
+        timerRef.current = window.setTimeout(() => {
+          void load();
+        }, backoff);
+      })
+      .finally(() => {
+        inFlightRef.current = false;
       });
   }, []);
 
@@ -35,10 +57,10 @@ function LiveMatchesSectionInner({ onMatchClick }: Props) {
     void load().finally(() => {
       if (alive) setLoading(false);
     });
-    const id = window.setInterval(() => void load(), POLL_MS);
+
     return () => {
       alive = false;
-      window.clearInterval(id);
+      if (timerRef.current) window.clearTimeout(timerRef.current);
     };
   }, [load]);
 
@@ -78,9 +100,21 @@ function LiveMatchesSectionInner({ onMatchClick }: Props) {
       )}
 
       {loading && !error ? (
-        <Group justify="center" py="md">
-          <Loader size="sm" color="green" />
-        </Group>
+        <div className={styles.grid}>
+          {Array.from({ length: 3 }).map((_, idx) => (
+            <div key={`live-skeleton-${idx}`} className={styles.card}>
+              <Group justify="space-between" mb={8} wrap="nowrap" gap="xs">
+                <Skeleton height={22} width={78} radius="xl" />
+                <Skeleton height={14} width={34} radius="sm" />
+              </Group>
+              <Group justify="space-between" align="center" wrap="nowrap" gap={8} grow>
+                <Skeleton height={12} width="33%" radius="sm" />
+                <Skeleton height={24} width={70} radius="sm" />
+                <Skeleton height={12} width="33%" radius="sm" />
+              </Group>
+            </div>
+          ))}
+        </div>
       ) : !error && items.length === 0 ? (
         <Text size="sm" c="dimmed" ta="center" py="sm">
           Nenhum jogo ao vivo.

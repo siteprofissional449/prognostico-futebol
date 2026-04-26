@@ -1,3 +1,5 @@
+import { reportError } from '../monitoring/sentry';
+
 /** Em dev usa o proxy do Vite (/api → localhost:3000). No Vercel defina VITE_API_BASE_URL com a URL HTTPS da API (ex.: Railway). */
 function apiBase(): string {
   const url = import.meta.env.VITE_API_BASE_URL?.trim();
@@ -45,10 +47,13 @@ export async function api<T>(
         String(e.message).includes('NetworkError') ||
         String(e.message).includes('Failed to fetch'));
     if (isNetwork) {
-      throw new Error(
+      const error = new Error(
         'Sem ligação à API (rede ou CORS). Confirme: (1) VITE_API_BASE_URL na Vercel = URL HTTPS do Railway; (2) FRONTEND_URL no Railway = https://prognostico-futebol.vercel.app; (3) Redeploy em ambos.',
       );
+      reportError(e, 'api-network-error');
+      throw error;
     }
+    reportError(e, 'api-fetch-error');
     throw e;
   }
 
@@ -58,6 +63,7 @@ export async function api<T>(
       url,
       (options.method || 'GET').toUpperCase(),
     );
+    reportError(new Error(msg), 'api-http-error');
     throw new Error(msg);
   }
 

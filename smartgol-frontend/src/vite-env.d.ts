@@ -3,6 +3,8 @@
 interface ImportMetaEnv {
   /** URL pública da API (ex.: https://sua-api.onrender.com). Vazio em local = proxy /api. */
   readonly VITE_API_BASE_URL?: string;
+  /** DSN do Sentry (opcional). */
+  readonly VITE_SENTRY_DSN?: string;
 }
 
 interface ImportMeta {

@@ -3,12 +3,12 @@ import { Link } from 'react-router-dom';
 import {
   Text,
   SimpleGrid,
-  Loader,
   Alert,
   Tabs,
   Group,
   Button,
   UnstyledButton,
+  Skeleton,
 } from '@mantine/core';
 import {
   IconCalendarEvent,
@@ -68,6 +68,21 @@ function formatTimeShort(iso: string) {
 
 function isFreePlan(plan: PlanType | null, isLoggedIn: boolean) {
   return !isLoggedIn || plan === 'FREE' || plan === null;
+}
+
+function LoadingGrid({ cards = 3 }: { cards?: number }) {
+  return (
+    <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md">
+      {Array.from({ length: cards }).map((_, idx) => (
+        <div key={`skeleton-${idx}`} className={styles.block}>
+          <Skeleton height={14} width="40%" mb={12} />
+          <Skeleton height={26} width="52%" mb={14} />
+          <Skeleton height={44} radius="md" mb={10} />
+          <Skeleton height={12} width="70%" />
+        </div>
+      ))}
+    </SimpleGrid>
+  );
 }
 
 export function Home() {
@@ -275,9 +290,7 @@ export function Home() {
         </div>
         {predictionsError && <Alert color="red" p="sm" radius="md" mb="sm">{predictionsError}</Alert>}
         {predictionsLoading ? (
-          <Group justify="center" py="lg">
-            <Loader size="md" color="green" type="oval" />
-          </Group>
+          <LoadingGrid />
         ) : topThree.length === 0 ? (
           <Text size="sm" c="dimmed" ta="center" py="md">Sem palpites para esta data.</Text>
         ) : (
@@ -305,9 +318,7 @@ export function Home() {
         <Tabs.Panel value="jogos" pt="md">
           {highlightsError && <Alert color="red" p="sm" mb="sm" radius="md">{highlightsError}</Alert>}
           {highlightsLoading ? (
-            <Group justify="center" py="lg">
-              <Loader size="md" color="green" />
-            </Group>
+            <LoadingGrid cards={6} />
           ) : highlights.length === 0 ? (
             <Text size="sm" c="dimmed" ta="center" py="md">Sem calendário para esta data.</Text>
           ) : (
@@ -322,9 +333,7 @@ export function Home() {
         <Tabs.Panel value="resultados" pt="md">
           {resultsError && <Alert color="red" p="sm" mb="sm" radius="md">{resultsError}</Alert>}
           {resultsLoading ? (
-            <Group justify="center" py="lg">
-              <Loader size="md" color="green" />
-            </Group>
+            <LoadingGrid cards={6} />
           ) : results.length === 0 ? (
             <Text size="sm" c="dimmed" ta="center" py="md">Sem resultados.</Text>
           ) : (
@@ -339,9 +348,7 @@ export function Home() {
         <Tabs.Panel value="palpites" pt="md">
           {predictionsError && <Alert color="red" p="sm" mb="sm" radius="md">{predictionsError}</Alert>}
           {predictionsLoading ? (
-            <Group justify="center" py="lg">
-              <Loader size="md" color="green" />
-            </Group>
+            <LoadingGrid cards={6} />
           ) : predictionsCur.length === 0 ? (
             <Text size="sm" c="dimmed" ta="center" py="md">Sem palpites.</Text>
           ) : (
