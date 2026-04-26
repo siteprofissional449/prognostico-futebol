@@ -11,6 +11,7 @@ import {
 } from '@tabler/icons-react';
 import { getHomePredictions } from '../api/predictions';
 import { getResultsOfDay, getTopLeaguesMatches, getMatchDetail, getGenerationInfo } from '../api/football';
+import { LiveMatchesSection } from '../components/LiveMatchesSection';
 import { useAuth } from '../contexts/AuthContext';
 import { GameCard } from '../components/GameCard';
 import { ResultCard } from '../components/ResultCard';
@@ -206,6 +207,11 @@ export function Home() {
                 Plano grátis: 5 palpites com análise completa; na home mostramos até 3 dos melhores
                 (só jogos reais). Lista completa em Prognósticos. Assinantes veem todos.
               </Text>
+              {genInfo.footballLiveData && (
+                <Text size="xs" c="dimmed" mb="xs">
+                  {genInfo.footballLiveData}
+                </Text>
+              )}
               {genInfo.lastAt ? (
                 <Text size="sm">
                   Última geração registada:{' '}
@@ -228,6 +234,8 @@ export function Home() {
           </Group>
         </Paper>
       )}
+
+      <LiveMatchesSection onMatchClick={openMatchDetail} />
 
       <Group justify="space-between" align="flex-end" wrap="wrap" gap="sm" mb="lg">
         <div>
