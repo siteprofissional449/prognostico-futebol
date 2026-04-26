@@ -14,6 +14,12 @@ function marketLabel(market: string | null) {
   if (market === 'HOME_WIN') return 'Casa vence';
   if (market === 'DRAW') return 'Empate';
   if (market === 'AWAY_WIN') return 'Fora vence';
+  if (market === 'OVER_25') return 'Mais de 2.5 gols';
+  if (market === 'OVER_2') return 'Mais de 2 gols';
+  if (market === 'UNDER_25') return 'Menos de 2.5 gols';
+  if (market === 'CORNERS_OVER' || market === 'CORNERS_UNDER') {
+    return market === 'CORNERS_OVER' ? 'Mais escanteios' : 'Menos escanteios';
+  }
   return market ?? '—';
 }
 

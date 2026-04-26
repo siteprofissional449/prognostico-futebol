@@ -17,6 +17,22 @@ import {
 } from './dto/prediction-view.dto';
 import { FootballService, MatchResultDto } from '../football/football.service';
 import { UserAccessContext } from '../users/users.service';
+import {
+  Prognostic,
+  PrognosticPlan,
+  PrognosticStatus,
+} from '../prognostic/prognostic.entity';
+
+const PROG_PLAN_TIER: Record<PrognosticPlan, number> = {
+  [PrognosticPlan.FREE]: 0,
+  [PrognosticPlan.DAILY]: 1,
+  [PrognosticPlan.WEEKLY]: 2,
+  [PrognosticPlan.PREMIUM]: 3,
+};
+
+function prognosticMinTierForUser(plan: PrognosticPlan): number {
+  return PROG_PLAN_TIER[plan] ?? PROG_PLAN_TIER[PrognosticPlan.PREMIUM];
+}
 
 const PLAN_ORDER: Record<PlanType, number> = {
   [PlanType.FREE]: 0,
@@ -41,6 +57,8 @@ export class PredictionsService {
   constructor(
     @InjectRepository(Prediction)
     private readonly predictionRepo: Repository<Prediction>,
+    @InjectRepository(Prognostic)
+    private readonly prognosticRepo: Repository<Prognostic>,
     @Inject(forwardRef(() => FootballService))
     private readonly footballService: FootballService,
   ) {}
@@ -170,6 +188,164 @@ export class PredictionsService {
     }
   }
 
+  private matchDateToYmd(d: Date | string): string {
+    const x = d instanceof Date ? d : new Date(d);
+    return Number.isNaN(x.getTime()) ? this.today() : x.toISOString().slice(0, 10);
+  }
+
+  private canUserSeePrognostic(p: Prognostic, userTier: number): boolean {
+    if (p.plan === PrognosticPlan.FREE) return true;
+    return prognosticMinTierForUser(p.plan) <= userTier;
+  }
+
+  private progPlanToMinPlan(plan: PrognosticPlan): PlanType {
+    if (plan === PrognosticPlan.DAILY) return PlanType.DAILY;
+    if (plan === PrognosticPlan.WEEKLY) return PlanType.WEEKLY;
+    if (plan === PrognosticPlan.PREMIUM) return PlanType.PREMIUM;
+    return PlanType.FREE;
+  }
+
+  /**
+   * Tenta mapear o texto do palpite manual para o mesmo formato dos automáticos
+   * (para calcular green/red quando o resultado do jogo existir na API).
+   */
+  private inferMarketFromPrognosticText(text: string): string | null {
+    const t = String(text || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/\p{M}/gu, '');
+    if (!t.trim()) return null;
+    if (/\b(empate|deu empate|x)\b/.test(t) && !t.includes('não em')) {
+      return 'DRAW';
+    }
+    if (/(fora|visitante|2\s*\(fora\)|b\s*\)|vitória (do |da )?visit)/.test(t)) {
+      return 'AWAY_WIN';
+    }
+    if (/(^|\s)(casa|mandante|1\s*\(casa\)|a\s*\))/.test(t) || t.includes('vitória da casa')) {
+      return 'HOME_WIN';
+    }
+    if (t.includes('menos') && (t.includes('2.5') || t.includes('2,5'))) {
+      return 'UNDER_25';
+    }
+    if (t.includes('mais de 2.5') || t.includes('mais de 2,5') || /\bover\s*2.5/.test(t)) {
+      return 'OVER_25';
+    }
+    if (t.includes('mais de 2') && !t.includes('2.5') && !t.includes('2,5')) {
+      return 'OVER_2';
+    }
+    if (t.includes('mais de') && (t.includes('2.5') || t.includes('2,5'))) {
+      return 'OVER_25';
+    }
+    if (t.includes('escanteio') && t.includes('mais')) return 'CORNERS_OVER';
+    if (t.includes('escanteio') && t.includes('menos')) return 'CORNERS_UNDER';
+    if (t.includes('empate') && t.length < 20) return 'DRAW';
+    return null;
+  }
+
+  private indexResultsByTeamPair(
+    list: MatchResultDto[],
+  ): Map<string, MatchResultDto> {
+    const m = new Map<string, MatchResultDto>();
+    for (const r of list) {
+      const k = `${this.normalizeTeamLabel(r.homeTeam)}|${this.normalizeTeamLabel(r.awayTeam)}`;
+      m.set(k, r);
+    }
+    return m;
+  }
+
+  private normalizeTeamLabel(s: string): string {
+    return String(s ?? '')
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/\p{M}/gu, '')
+      .replace(/[^a-z0-9áàâãéêíóôõúç\s-]/gi, '')
+      .replace(/\s+/g, ' ');
+  }
+
+  private prognosticToHistoryViewDto(
+    p: Prognostic,
+    rankIndex: number,
+    access: UserAccessContext,
+    resultsByTeam: Map<string, MatchResultDto>,
+  ): PredictionViewDto {
+    const isPremium = rankIndex >= FREE_PREDICTION_SLOTS;
+    const locked = access.userAccessTier === 0 ? isPremium : false;
+    const prob = p.probability != null ? Number(p.probability) : null;
+    const oddN = p.odd != null ? Number(p.odd) : null;
+    const minPlan = this.progPlanToMinPlan(p.plan);
+    const inferred = this.inferMarketFromPrognosticText(p.prediction);
+    const displayMarket = inferred ?? p.prediction;
+
+    const dto = new PredictionViewDto();
+    dto.id = `manual-${p.id}`;
+    dto.matchId = `manual-${p.id}`;
+    dto.homeTeam = p.homeTeam;
+    dto.awayTeam = p.awayTeam;
+    dto.league = 'Prognóstico manual';
+    dto.startTime = new Date(p.matchDate).toISOString();
+    dto.predictionDate = this.matchDateToYmd(p.matchDate);
+    dto.minPlan = minPlan;
+
+    if (locked) {
+      dto.market = null;
+      dto.probability = null;
+      dto.odd = null;
+      dto.probHome = null;
+      dto.probDraw = null;
+      dto.probAway = null;
+      dto.bestBet = null;
+      dto.analysis = null;
+      dto.confidence = null;
+    } else {
+      dto.market = displayMarket;
+      dto.probability = prob;
+      dto.odd = oddN;
+      dto.probHome = null;
+      dto.probDraw = null;
+      dto.probAway = null;
+      dto.bestBet = inferred ?? p.prediction;
+      dto.analysis = p.analysis;
+      dto.confidence = prob;
+    }
+
+    dto.isPremium = isPremium;
+    dto.locked = locked;
+    dto.finalScore = null;
+    dto.resultStatus = null;
+
+    if (access.userAccessTier < PLAN_ORDER[PlanType.WEEKLY]) {
+      return dto;
+    }
+
+    const k = `${this.normalizeTeamLabel(p.homeTeam)}|${this.normalizeTeamLabel(p.awayTeam)}`;
+    const result = resultsByTeam.get(k);
+
+    if (p.status === PrognosticStatus.WON) {
+      dto.resultStatus = 'GREEN';
+      if (result) dto.finalScore = `${result.homeScore}x${result.awayScore}`;
+    } else if (p.status === PrognosticStatus.LOST) {
+      dto.resultStatus = 'RED';
+      if (result) dto.finalScore = `${result.homeScore}x${result.awayScore}`;
+    } else if (result) {
+      dto.finalScore = `${result.homeScore}x${result.awayScore}`;
+      const totalGoals = result.homeScore + result.awayScore;
+      if (inferred) {
+        dto.resultStatus = this.computeResultStatus(
+          inferred,
+          result.winner,
+          totalGoals,
+        );
+      } else {
+        dto.resultStatus = 'PENDING';
+      }
+    } else {
+      dto.resultStatus = 'PENDING';
+    }
+
+    return dto;
+  }
+
   private normalizeDate(input?: string): string {
     if (!input) return this.today();
     const trimmed = input.trim();
@@ -295,15 +471,61 @@ export class PredictionsService {
       byDate.set(row.predictionDate, arr);
     }
 
+    const progRows = await this.prognosticRepo
+      .createQueryBuilder('g')
+      .where('CAST(g.matchDate AS DATE) >= :from', { from: rangeFrom })
+      .andWhere('CAST(g.matchDate AS DATE) <= :to', { to: rangeTo })
+      .orderBy('g.matchDate', 'DESC')
+      .getMany();
+
+    const byDateProg = new Map<string, Prognostic[]>();
+    for (const g of progRows) {
+      const d = this.matchDateToYmd(g.matchDate);
+      if (d >= today) continue;
+      if (!this.canUserSeePrognostic(g, access.userAccessTier)) continue;
+      const arr = byDateProg.get(d) || [];
+      arr.push(g);
+      byDateProg.set(d, arr);
+    }
+
+    const dateKeys = new Set<string>([...byDate.keys(), ...byDateProg.keys()]);
+    const sortedDates = [...dateKeys].sort((a, b) => (a < b ? 1 : -1));
+
     const days: PredictionsHistoryDayDto[] = [];
-    const sortedDates = [...byDate.keys()].sort((a, b) => (a < b ? 1 : -1));
     for (const d of sortedDates) {
       const list = (byDate.get(d) || []).filter(
         (p) => !this.isPlaceholderMockPrediction(p),
       );
-      if (list.length === 0) continue;
-      const results = await this.loadResultsForDate(d);
-      const items = list.map((p, idx) => this.toViewDto(p, idx, access, results));
+      const progList = byDateProg.get(d) || [];
+      if (list.length === 0 && progList.length === 0) continue;
+
+      const resultsMap = await this.loadResultsForDate(d);
+      const resultsList = [...resultsMap.values()];
+      const resultsByTeam = this.indexResultsByTeamPair(resultsList);
+
+      type Row =
+        | { kind: 'pred'; p: Prediction; sort: number }
+        | { kind: 'prog'; p: Prognostic; sort: number };
+      const merged: Row[] = [
+        ...list.map((p) => ({
+          kind: 'pred' as const,
+          p,
+          sort: Number(p.probability ?? 0) * 1000 + Number(p.odd ?? 0),
+        })),
+        ...progList.map((p) => ({
+          kind: 'prog' as const,
+          p,
+          sort: Number(p.probability ?? 0) * 1000 + Number(p.odd ?? 0),
+        })),
+      ];
+      merged.sort((a, b) => b.sort - a.sort);
+
+      const items: PredictionViewDto[] = merged.map((row, idx) =>
+        row.kind === 'pred'
+          ? this.toViewDto(row.p, idx, access, resultsMap)
+          : this.prognosticToHistoryViewDto(row.p, idx, access, resultsByTeam),
+      );
+
       const day = new PredictionsHistoryDayDto();
       day.date = d;
       day.items = items;

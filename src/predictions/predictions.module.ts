@@ -9,10 +9,11 @@ import { FootballModule } from '../football/football.module';
 import { GenerationMeta } from '../football/generation-meta.entity';
 import { UsersModule } from '../users/users.module';
 import { AdminGuard } from '../admin/admin.guard';
+import { Prognostic } from '../prognostic/prognostic.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Prediction, GenerationMeta]),
+    TypeOrmModule.forFeature([Prediction, GenerationMeta, Prognostic]),
     forwardRef(() => FootballModule),
     UsersModule,
   ],
