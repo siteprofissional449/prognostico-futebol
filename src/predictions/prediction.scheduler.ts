@@ -17,6 +17,7 @@ export class PredictionSchedulerService {
 
   constructor(private readonly predictionService: PredictionService) {}
 
+  /** Gera palpites no mesmo horário; lê a API futebol+odds **em tempo real** (não usa cache de destaques). */
   @Cron('5 0 * * *', {
     timeZone: process.env.CRON_TZ || 'America/Sao_Paulo',
   })

@@ -37,6 +37,8 @@ export interface ApiMatchResult {
   competition: { name: string; code?: string };
   utcDate: string;
   status: string;
+  /** Minuto aproximado (ex.: 67) em jogos IN_PLAY. */
+  minute?: number;
   score?: {
     fullTime?: { home: number; away: number };
     halfTime?: { home: number; away: number };
@@ -65,11 +67,28 @@ export interface MatchDetailDto extends MatchResultDto {
   stage?: string;
 }
 
+/** Jogos ao vivo (placar em tempo quase real; cache no servidor, ~1–2 req/min na API). */
+export interface LiveMatchViewDto extends MatchResultDto {
+  status: string;
+  minute: number | null;
+}
+
 @Injectable()
 export class FootballService {
   private readonly logger = new Logger(FootballService.name);
   private readonly apiKey: string;
   private readonly baseUrl = 'https://api.football-data.org/v4';
+
+  /** Partidas (destaques) por data: GET /football/highlights. TTL padrão 6h. */
+  private scheduleByDate = new Map<
+    string,
+    { data: MatchResultDto[]; fetchedAt: number }
+  >();
+  private readonly scheduleTtlMs: number;
+
+  /** IN_PLAY + PAUSED nas ligas configuradas. */
+  private liveCache: { items: LiveMatchViewDto[]; fetchedAt: number } | null =
+    null;
 
   constructor(
     private readonly config: ConfigService,
@@ -79,6 +98,11 @@ export class FootballService {
     private readonly generationMetaRepo: Repository<GenerationMeta>,
   ) {
     this.apiKey = this.config.get<string>('FOOTBALL_API_KEY') || '';
+    const ttlH = Number(this.config.get<string>('FOOTBALL_SCHEDULE_CACHE_TTL_HOURS'));
+    this.scheduleTtlMs =
+      Number.isFinite(ttlH) && ttlH > 0
+        ? ttlH * 60 * 60 * 1000
+        : 6 * 60 * 60 * 1000;
   }
 
   /** IDs das principais ligas do mundo (football-data.org) */
@@ -100,19 +124,62 @@ export class FootballService {
     return matches.map((m) => this.toMatchResultDto(m));
   }
 
-  /** Melhores jogos do mundo: partidas das principais ligas no dia (agendadas ou finalizadas) */
+  /**
+   * Melhores jogos do dia (estado agendado / resultados) nas ligas configuradas.
+   * Usa **cache** no servidor (TTL 6h por defeito) para respeitar limites da API; o cron
+   * `FOOTBALL_SCHEDULE_WARM_CRON` renova. **Não** é usada na geração de palpites (00:05).
+   */
   async getTopLeaguesMatches(date?: string): Promise<MatchResultDto[]> {
-    const targetDate = date || this.predictionsService.today();
+    const tz = this.config.get<string>('CRON_TZ') || 'America/Sao_Paulo';
+    const targetDate =
+      date?.trim() || new Date().toLocaleDateString('sv-SE', { timeZone: tz });
     if (!this.apiKey) {
       return this.getMockResults(targetDate);
     }
+    const hit = this.scheduleByDate.get(targetDate);
+    if (hit && Date.now() - hit.fetchedAt < this.scheduleTtlMs) {
+      return hit.data;
+    }
+    return this.fetchTopLeaguesAndCache(targetDate);
+  }
+
+  /**
+   * Atualiza o cache de destaques/grade do dia (chamada pelo cron a cada 6h).
+   * Uma requisição à API por dia pedido.
+   */
+  async warmScheduleCacheForTodayInTz(): Promise<void> {
+    if (!this.apiKey) return;
+    const tz = this.config.get<string>('CRON_TZ') || 'America/Sao_Paulo';
+    const ymd = new Date().toLocaleDateString('sv-SE', { timeZone: tz });
+    try {
+      await this.fetchTopLeaguesAndCache(ymd);
+      this.logger.debug(`Cache de destaques renovado: ${ymd} (${tz}).`);
+    } catch (e) {
+      this.logger.warn(
+        `warmScheduleCache: ${e instanceof Error ? e.message : e}`,
+      );
+    }
+  }
+
+  private async fetchTopLeaguesAndCache(ymd: string): Promise<MatchResultDto[]> {
+    const list = await this.fetchTopLeaguesFromApi(ymd);
+    this.scheduleByDate.set(ymd, { data: list, fetchedAt: Date.now() });
+    if (this.scheduleByDate.size > 14) {
+      const oldest = [...this.scheduleByDate.keys()].sort();
+      for (const k of oldest.slice(0, oldest.length - 14)) {
+        this.scheduleByDate.delete(k);
+      }
+    }
+    return list;
+  }
+
+  private async fetchTopLeaguesFromApi(ymd: string): Promise<MatchResultDto[]> {
     try {
       const comps = this.topLeagueIds.join(',');
-      /** v4: `date` é yyyy-MM-dd; dateFrom/dateTo com o mesmo dia podem devolver lista vazia (dateTo exclusivo). */
       const { data } = await axios.get<{ matches?: ApiMatchResult[] }>(
         `${this.baseUrl}/matches`,
         {
-          params: { date: targetDate, competitions: comps },
+          params: { date: ymd, competitions: comps },
           headers: { 'X-Auth-Token': this.apiKey },
         },
       );
@@ -122,12 +189,74 @@ export class FootballService {
       );
     } catch (e) {
       this.logger.warn(
-        `Football-Data (highlights) falhou para ${targetDate}: ${
+        `Football-Data (highlights) falhou para ${ymd}: ${
           e instanceof Error ? e.message : e
         }`,
       );
       return [];
     }
+  }
+
+  /**
+   * Jogos ao vivo (IN_PLAY e PAUSED) — **2 chamadas** à API no máximo por atualização
+   * (fica dentro de 20 req/min com o resto do tráfego).
+   */
+  async refreshLiveMatchesFromApi(): Promise<void> {
+    if (!this.apiKey) {
+      this.liveCache = {
+        items: [],
+        fetchedAt: Date.now(),
+      };
+      return;
+    }
+    const comps = this.topLeagueIds.join(',');
+    const headers = { 'X-Auth-Token': this.apiKey };
+    const combined: ApiMatchResult[] = [];
+    for (const st of ['IN_PLAY', 'PAUSED'] as const) {
+      try {
+        const { data } = await axios.get<{ matches?: ApiMatchResult[] }>(
+          `${this.baseUrl}/matches`,
+          { params: { competitions: comps, status: st }, headers, timeout: 15000 },
+        );
+        combined.push(...(data.matches || []));
+      } catch (e) {
+        this.logger.warn(
+          `Football-Data (live status=${st}): ${
+            e instanceof Error ? e.message : e
+          }`,
+        );
+      }
+    }
+    const byId = new Map<number, ApiMatchResult>();
+    for (const m of combined) {
+      byId.set(m.id, m);
+    }
+    const items = [...byId.values()]
+      .map((m) => this.toLiveViewDto(m))
+      .sort(
+        (a, b) => new Date(a.utcDate).getTime() - new Date(b.utcDate).getTime(),
+      );
+    this.liveCache = { items, fetchedAt: Date.now() };
+  }
+
+  /** Resposta pública: placares ao vivo (cache; atualizado por cron a cada 1 min). */
+  getLiveSnapshot(): { items: LiveMatchViewDto[]; refreshedAt: string } {
+    if (!this.liveCache) {
+      return { items: [], refreshedAt: new Date(0).toISOString() };
+    }
+    return {
+      items: this.liveCache.items,
+      refreshedAt: new Date(this.liveCache.fetchedAt).toISOString(),
+    };
+  }
+
+  private toLiveViewDto(m: ApiMatchResult): LiveMatchViewDto {
+    const base = this.toMatchResultDto(m);
+    return {
+      ...base,
+      status: m.status,
+      minute: m.minute != null && Number.isFinite(Number(m.minute)) ? Math.round(Number(m.minute)) : null,
+    };
   }
 
   /** Detalhe de um jogo (para estatísticas/placar) */
@@ -356,7 +485,12 @@ export class FootballService {
   async getGenerationInfo(): Promise<{
     lastAt: string | null;
     lastCount: number | null;
+    /** Palpites automáticos (cron 00:05). */
     scheduleDescription: string;
+    /** Cache de /football/highlights. */
+    footballHighlightsData: string;
+    /** Atualização de /football/live. */
+    footballLiveData: string;
     timezone: string;
   }> {
     const row = await this.generationMetaRepo.findOne({
@@ -369,10 +503,14 @@ export class FootballService {
         : tz === 'Europe/Lisbon'
           ? 'Lisboa'
           : tz;
+    const ttlH = this.scheduleTtlMs / 3600000;
     return {
       lastAt: row?.lastPredictionsAt?.toISOString() ?? null,
       lastCount: row?.lastCount ?? null,
-      scheduleDescription: `Todos os dias às 00:05 (${tzLabel})`,
+      scheduleDescription: `Palpites: todos os dias às 00:05 (${tzLabel})`,
+      footballHighlightsData: `Jogos do dia (destaques): cache no servidor, renovado a cada ${ttlH}h (ligas principais) — ligeiramente atrasado face à API; poupa cota (ex. 20 req/min).`,
+      footballLiveData:
+        'Ao vivo: placar e minuto atualizados a cada 1 minuto (IN_PLAY/PAUSED nas mesmas ligas; ~2 chamadas API/min).',
       timezone: tz,
     };
   }

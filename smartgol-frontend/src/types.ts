@@ -5,6 +5,10 @@ export interface GenerationInfo {
   lastAt: string | null;
   lastCount: number | null;
   scheduleDescription: string;
+  /** Cache de /football/highlights. */
+  footballHighlightsData?: string;
+  /** Atualização de /football/live. */
+  footballLiveData?: string;
   timezone: string;
 }
 
@@ -150,6 +154,11 @@ export interface MatchResult {
   awayScore: number;
   winner: 'HOME' | 'DRAW' | 'AWAY';
   halfTime?: { home: number; away: number };
+}
+
+export interface LiveMatchInfo extends MatchResult {
+  status: string;
+  minute: number | null;
 }
 
 /** Detalhe do jogo (para estatísticas) */

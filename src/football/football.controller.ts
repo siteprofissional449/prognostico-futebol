@@ -25,6 +25,12 @@ export class FootballController {
     return this.footballService.getTopLeaguesMatches(date);
   }
 
+  /** Jogos ao vivo (placar ~1 min; cache alimentado por cron) */
+  @Get('live')
+  live() {
+    return this.footballService.getLiveSnapshot();
+  }
+
   /** Detalhe/estatísticas de um jogo */
   @Get('matches/:id')
   async matchDetail(@Param('id') id: string) {
