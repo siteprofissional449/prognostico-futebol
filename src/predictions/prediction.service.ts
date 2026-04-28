@@ -31,16 +31,16 @@ const MIN_PUBLISHED_ODD =
 const BATCH_MAX_MATCHES =
   Number(process.env.BATCH_MAX_MATCHES) > 0
     ? Number(process.env.BATCH_MAX_MATCHES)
-    : 120;
+    : 220;
 const BATCH_MAX_PICKS =
   Number(process.env.BATCH_MAX_PICKS) > 0
     ? Number(process.env.BATCH_MAX_PICKS)
-    : 50;
+    : 72;
 /** Meta mínima de palpites gravados por dia (lote + por jogo + preenchimento por odds). */
 const MIN_DAILY_PREDICTIONS =
   Number(process.env.MIN_DAILY_PREDICTIONS) > 0
     ? Number(process.env.MIN_DAILY_PREDICTIONS)
-    : 35;
+    : 52;
 const MIN_CONFIDENCE_AI = 58;
 
 interface AiBatchPick {

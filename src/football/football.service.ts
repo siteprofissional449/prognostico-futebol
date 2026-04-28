@@ -73,11 +73,46 @@ export interface LiveMatchViewDto extends MatchResultDto {
   minute: number | null;
 }
 
+/** IDs football-data.org v4 — padrão ampliado (mais jogos/dia). Sobrescreve com FOOTBALL_COMPETITION_IDS. */
+const DEFAULT_COMPETITION_IDS: readonly number[] = [
+  2021, // Premier League
+  2014, // La Liga
+  2019, // Serie A (IT)
+  2002, // Bundesliga
+  2015, // Ligue 1
+  2001, // Champions League
+  2018, // Europa League
+  2013, // Brasileirão Série A (BSA)
+  2017, // Primeira Liga (PT)
+  2003, // Eredivisie (NL)
+  2016, // Championship (ELC — Inglaterra 2ª)
+];
+
+function parseCompetitionIds(raw: string | undefined): number[] {
+  if (!raw?.trim()) return [...DEFAULT_COMPETITION_IDS];
+  const nums = raw
+    .split(/[,]+/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((s) => parseInt(s, 10))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  const uniq = [...new Set(nums)];
+  return uniq.length ? uniq : [...DEFAULT_COMPETITION_IDS];
+}
+
 @Injectable()
 export class FootballService {
   private readonly logger = new Logger(FootballService.name);
   private readonly apiKey: string;
   private readonly baseUrl = 'https://api.football-data.org/v4';
+  /** Ligas/copas usadas em destaques, ao vivo e geração de palpites. */
+  private readonly competitionIds: number[];
+  /** Máx. de partidas/dia a enriquecer com GET /matches/{id}/odds (cada uma = 1 pedido à API). */
+  private readonly maxMatchesOddsEnrich: number;
+  /** Paralelismo dentro de cada lote de enrichment de odds. */
+  private readonly oddsBatchSize: number;
+  /** Pausa (ms) entre lotes — útil para planos com rate limit forte (ex.: 20 req/min). */
+  private readonly oddsBatchPauseMs: number;
 
   /** Partidas (destaques) por data: GET /football/highlights. TTL padrão 6h. */
   private scheduleByDate = new Map<
@@ -98,23 +133,31 @@ export class FootballService {
     private readonly generationMetaRepo: Repository<GenerationMeta>,
   ) {
     this.apiKey = this.config.get<string>('FOOTBALL_API_KEY') || '';
+    this.competitionIds = parseCompetitionIds(
+      this.config.get<string>('FOOTBALL_COMPETITION_IDS'),
+    );
+    const maxOdds = Number(this.config.get<string>('FOOTBALL_MAX_ODDS_ENRICH'));
+    this.maxMatchesOddsEnrich =
+      Number.isFinite(maxOdds) && maxOdds > 0 ? Math.min(Math.floor(maxOdds), 500) : 220;
+    const bs = Number(this.config.get<string>('FOOTBALL_ODDS_BATCH_SIZE'));
+    this.oddsBatchSize =
+      Number.isFinite(bs) && bs > 0 ? Math.min(Math.floor(bs), 80) : 40;
+    const pause = Number(this.config.get<string>('FOOTBALL_ODDS_BATCH_PAUSE_MS'));
+    this.oddsBatchPauseMs =
+      Number.isFinite(pause) && pause >= 0 ? Math.min(Math.floor(pause), 120_000) : 0;
     const ttlH = Number(this.config.get<string>('FOOTBALL_SCHEDULE_CACHE_TTL_HOURS'));
     this.scheduleTtlMs =
       Number.isFinite(ttlH) && ttlH > 0
         ? ttlH * 60 * 60 * 1000
         : 6 * 60 * 60 * 1000;
+    this.logger.log(
+      `Football-data: ${this.competitionIds.length} competição(ões); odds até ${this.maxMatchesOddsEnrich} jogos (lotes ${this.oddsBatchSize}, pausa ${this.oddsBatchPauseMs}ms)`,
+    );
   }
 
-  /** IDs das principais ligas do mundo (football-data.org) */
-  private readonly topLeagueIds = [
-    2021, // Premier League
-    2014, // La Liga
-    2019, // Serie A
-    2002, // Bundesliga
-    2015, // Ligue 1
-    2001, // Champions League
-    2018, // Europa League
-  ];
+  private competitionsParam(): string {
+    return this.competitionIds.join(',');
+  }
 
   /** Resultados do dia (partidas finalizadas) */
   async getResultsOfDay(date?: string): Promise<MatchResultDto[]> {
@@ -175,7 +218,7 @@ export class FootballService {
 
   private async fetchTopLeaguesFromApi(ymd: string): Promise<MatchResultDto[]> {
     try {
-      const comps = this.topLeagueIds.join(',');
+      const comps = this.competitionsParam();
       const { data } = await axios.get<{ matches?: ApiMatchResult[] }>(
         `${this.baseUrl}/matches`,
         {
@@ -209,7 +252,7 @@ export class FootballService {
       };
       return;
     }
-    const comps = this.topLeagueIds.join(',');
+    const comps = this.competitionsParam();
     const headers = { 'X-Auth-Token': this.apiKey };
     const combined: ApiMatchResult[] = [];
     for (const st of ['IN_PLAY', 'PAUSED'] as const) {
@@ -520,7 +563,7 @@ export class FootballService {
       return this.getMockMatches(date);
     }
     try {
-      const comps = this.topLeagueIds.join(',');
+      const comps = this.competitionsParam();
       const { data } = await axios.get<{ matches?: ApiMatch[] }>(
         `${this.baseUrl}/matches`,
         {
@@ -535,9 +578,9 @@ export class FootballService {
         );
         return [];
       }
-      const withOdds = await Promise.all(
-        matches.slice(0, 120).map((m) => this.enrichWithOdds(m)),
-      );
+      const cap = Math.min(matches.length, this.maxMatchesOddsEnrich);
+      const slice = matches.slice(0, cap);
+      const withOdds = await this.enrichMatchesOddsInBatches(slice);
       const withLoadedOdds = withOdds.filter((m) => this.hasOddsPayload(m.odds));
       if (withLoadedOdds.length === 0 && matches.length > 0) {
         this.logger.warn(
@@ -555,6 +598,21 @@ export class FootballService {
       );
       return [];
     }
+  }
+
+  /** Varre odds em paralelo por lotes; pausa opcional entre lotes para não rebentar quotas da API. */
+  private async enrichMatchesOddsInBatches(matches: ApiMatch[]): Promise<ApiMatch[]> {
+    const { oddsBatchSize: size, oddsBatchPauseMs: pauseMs } = this;
+    const out: ApiMatch[] = [];
+    for (let i = 0; i < matches.length; i += size) {
+      const chunk = matches.slice(i, i + size);
+      const part = await Promise.all(chunk.map((m) => this.enrichWithOdds(m)));
+      out.push(...part);
+      if (i + size < matches.length && pauseMs > 0) {
+        await new Promise((r) => setTimeout(r, pauseMs));
+      }
+    }
+    return out;
   }
 
   /** Odds no payload da listagem: array de mercados ou objeto { homeWin, draw, awayWin } (v4). */
