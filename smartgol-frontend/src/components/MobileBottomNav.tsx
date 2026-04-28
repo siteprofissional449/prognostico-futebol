@@ -29,65 +29,77 @@ export function MobileBottomNav() {
       <NavLink
         to="/"
         end
+        aria-label="Jogos"
+        title="Jogos"
         className={({ isActive }) =>
           `${classes.item} ${isActive ? classes.active : ''}`
         }
       >
         <IconHome size={22} stroke={1.5} className={classes.icon} />
-        <span className={classes.label}>Jogos</span>
+        <span className={`${classes.label} ${classes.labelMobileHidden}`}>Jogos</span>
       </NavLink>
 
       <NavLink
         to="/prognosticos"
+        aria-label="Palpites"
+        title="Palpites"
         className={({ isActive }) =>
           `${classes.item} ${isActive ? classes.active : ''}`
         }
       >
         <IconBallFootball size={22} stroke={1.5} className={classes.icon} />
-        <span className={classes.label}>Palpites</span>
+        <span className={`${classes.label} ${classes.labelMobileHidden}`}>Palpites</span>
       </NavLink>
 
       {showHistory && (
         <NavLink
           to="/historico"
+          aria-label="Histórico"
+          title="Histórico"
           className={({ isActive }) =>
             `${classes.item} ${isActive ? classes.active : ''}`
           }
         >
           <IconHistory size={22} stroke={1.5} className={classes.icon} />
-          <span className={classes.label}>Histórico</span>
+          <span className={`${classes.label} ${classes.labelMobileHidden}`}>Histórico</span>
         </NavLink>
       )}
 
       <NavLink
         to="/planos"
+        aria-label="Planos"
+        title="Planos"
         className={({ isActive }) =>
           `${classes.item} ${isActive ? classes.active : ''}`
         }
       >
         <IconCreditCard size={22} stroke={1.5} className={classes.icon} />
-        <span className={classes.label}>Planos</span>
+        <span className={`${classes.label} ${classes.labelMobileHidden}`}>Planos</span>
       </NavLink>
 
       <NavLink
         to="/premium"
+        aria-label="VIP"
+        title="VIP"
         className={({ isActive }) =>
           `${classes.item} ${isActive ? classes.active : ''}`
         }
       >
         <IconCrown size={22} stroke={1.5} className={classes.icon} />
-        <span className={classes.label}>VIP</span>
+        <span className={`${classes.label} ${classes.labelMobileHidden}`}>VIP</span>
       </NavLink>
 
       <NavLink
         to={accountTo}
         state={!isLoggedIn ? { from: pathname } : undefined}
+        aria-label={isLoggedIn ? 'Conta' : 'Entrar'}
+        title={isLoggedIn ? 'Conta' : 'Entrar'}
         className={({ isActive }) =>
           `${classes.item} ${isActive ? classes.active : ''}`
         }
       >
         <AccountIcon size={22} stroke={1.5} className={classes.icon} />
-        <span className={classes.label}>{isLoggedIn ? 'Conta' : 'Entrar'}</span>
+        <span className={`${classes.label} ${classes.labelMobileHidden}`}>{isLoggedIn ? 'Conta' : 'Entrar'}</span>
       </NavLink>
     </nav>
   );
