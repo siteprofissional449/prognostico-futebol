@@ -1,6 +1,6 @@
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { Button, Container, Group, Title } from '@mantine/core';
-import { IconLayoutDashboard, IconUsers, IconBallFootball } from '@tabler/icons-react';
+import { IconLayoutDashboard, IconUsers, IconBallFootball, IconPhoto } from '@tabler/icons-react';
 
 export function AdminShell() {
   const { pathname } = useLocation();
@@ -36,6 +36,15 @@ export function AdminShell() {
             leftSection={<IconBallFootball size={16} />}
           >
             Prognósticos
+          </Button>
+          <Button
+            component={Link}
+            to="/admin/comerciais"
+            variant={pathname.startsWith('/admin/comerciais') ? 'filled' : 'light'}
+            size="sm"
+            leftSection={<IconPhoto size={16} />}
+          >
+            Comerciais
           </Button>
           <Button component={Link} to="/" variant="subtle" size="sm">
             Voltar ao site

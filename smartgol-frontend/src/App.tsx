@@ -27,6 +27,9 @@ const AdminUsers = lazy(() => import('./pages/AdminUsers').then((m) => ({ defaul
 const AdminPrognosticos = lazy(() =>
   import('./pages/AdminPrognosticos').then((m) => ({ default: m.AdminPrognosticos })),
 );
+const AdminCommercials = lazy(() =>
+  import('./pages/AdminCommercials').then((m) => ({ default: m.AdminCommercials })),
+);
 
 function PageLoadingFallback() {
   return (
@@ -57,6 +60,7 @@ function App() {
                     <Route index element={<AdminDashboard />} />
                     <Route path="usuarios" element={<AdminUsers />} />
                     <Route path="prognosticos" element={<AdminPrognosticos />} />
+                    <Route path="comerciais" element={<AdminCommercials />} />
                   </Route>
                 </Route>
                 <Route path="*" element={<Navigate to="/" replace />} />

@@ -12,6 +12,7 @@ import { AdminModule } from './admin/admin.module';
 import { PrognosticModule } from './prognostic/prognostic.module';
 import { PremiumModule } from './premium/premium.module';
 import { PaymentsModule } from './payments/payments.module';
+import { CommercialModule } from './commercial/commercial.module';
 
 /** Aceita true, 1, yes, on (Render e outros painéis variam). */
 function envFlag(name: string): boolean {
@@ -80,6 +81,7 @@ function typeOrmOptions(): TypeOrmModuleOptions {
     PrognosticModule,
     PremiumModule,
     PaymentsModule,
+    CommercialModule,
   ],
   controllers: [AppController],
 })

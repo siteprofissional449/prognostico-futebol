@@ -167,3 +167,17 @@ export interface MatchDetail extends MatchResult {
   minute?: number;
   stage?: string;
 }
+
+/** Comercial ativo para o banner (carousel). */
+export interface CommercialPublic {
+  id: string;
+  imageUrl: string;
+  linkUrl: string;
+  sortOrder: number;
+  title?: string | null;
+}
+
+/** Comercial para gestão no admin (inclui inativos em listagem total). */
+export interface CommercialAdmin extends CommercialPublic {
+  active: boolean;
+}
