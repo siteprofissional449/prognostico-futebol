@@ -12,6 +12,12 @@ function looksLikeHttpsOrHttp(u: string): boolean {
   return t.startsWith('https://') || t.startsWith('http://');
 }
 
+function looksLikeImageSource(u: string): boolean {
+  const t = u.trim();
+  if (looksLikeHttpsOrHttp(t)) return true;
+  return /^data:image\/[a-zA-Z0-9.+-]+;base64,[a-zA-Z0-9+/=\s]+$/.test(t);
+}
+
 @Injectable()
 export class CommercialService {
   constructor(
@@ -52,9 +58,9 @@ export class CommercialService {
         'Campos obrigatórios: URL da imagem e URL do link.',
       );
     }
-    if (!looksLikeHttpsOrHttp(imageUrl) || !looksLikeHttpsOrHttp(linkUrl)) {
+    if (!looksLikeImageSource(imageUrl) || !looksLikeHttpsOrHttp(linkUrl)) {
       throw new BadRequestException(
-        'Use URLs iniciando com https:// ou http://',
+        'Imagem deve ser URL http(s) ou data:image base64. Link deve iniciar com https:// ou http://',
       );
     }
 
@@ -92,9 +98,9 @@ export class CommercialService {
     const nextImage = body.imageUrl !== undefined ? String(body.imageUrl).trim() : prev.imageUrl;
     const nextLink = body.linkUrl !== undefined ? String(body.linkUrl).trim() : prev.linkUrl;
 
-    if (!looksLikeHttpsOrHttp(nextImage) || !looksLikeHttpsOrHttp(nextLink)) {
+    if (!looksLikeImageSource(nextImage) || !looksLikeHttpsOrHttp(nextLink)) {
       throw new BadRequestException(
-        'Use URLs iniciando com https:// ou http://',
+        'Imagem deve ser URL http(s) ou data:image base64. Link deve iniciar com https:// ou http://',
       );
     }
 

@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type ClipboardEvent,
+} from 'react';
 import {
   Button,
   Group,
@@ -21,6 +28,39 @@ import {
   adminPatchCommercial,
 } from '../api/commercials';
 
+function readImageFromClipboard(
+  event: ClipboardEvent<HTMLElement>,
+  onDone: (dataUrl: string) => void,
+): boolean {
+  const items = event.clipboardData?.items;
+  if (!items?.length) return false;
+
+  for (const item of Array.from(items)) {
+    if (!item.type.startsWith('image/')) continue;
+    const file = item.getAsFile();
+    if (!file) continue;
+    event.preventDefault();
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === 'string' ? reader.result : '';
+      if (result.startsWith('data:image/')) onDone(result);
+    };
+    reader.readAsDataURL(file);
+    return true;
+  }
+  return false;
+}
+
+function readImageFileAsDataUrl(file: File, onDone: (dataUrl: string) => void): void {
+  if (!file.type.startsWith('image/')) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const result = typeof reader.result === 'string' ? reader.result : '';
+    if (result.startsWith('data:image/')) onDone(result);
+  };
+  reader.readAsDataURL(file);
+}
+
 function CommercialEditor({
   row,
   onReload,
@@ -34,6 +74,7 @@ function CommercialEditor({
   const [sortOrder, setSortOrder] = useState(row.sortOrder);
   const [active, setActive] = useState(row.active);
   const [saving, setSaving] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     setImageUrl(row.imageUrl);
@@ -85,6 +126,38 @@ function CommercialEditor({
     }
   }, [onReload, row.id]);
 
+  const onPasteImage = useCallback((event: ClipboardEvent<HTMLElement>) => {
+    const ok = readImageFromClipboard(event, (dataUrl) => {
+      setImageUrl(dataUrl);
+      notifications.show({
+        color: 'green',
+        title: 'Imagem colada',
+        message: 'A imagem foi convertida para uso direto no banner.',
+      });
+    });
+    if (!ok) {
+      notifications.show({
+        color: 'yellow',
+        title: 'Sem imagem no clipboard',
+        message: 'Copie uma imagem e cole aqui (Ctrl+V).',
+      });
+    }
+  }, []);
+
+  const onPickImageFile = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0];
+    if (!file) return;
+    readImageFileAsDataUrl(file, (dataUrl) => {
+      setImageUrl(dataUrl);
+      notifications.show({
+        color: 'green',
+        title: 'Imagem selecionada',
+        message: 'Arquivo convertido para uso direto no banner.',
+      });
+    });
+    event.currentTarget.value = '';
+  }, []);
+
   return (
     <Paper p="md" radius="md" withBorder>
       <Group align="flex-start" wrap="wrap" gap="md">
@@ -109,10 +182,33 @@ function CommercialEditor({
             onChange={(e) => setTitle(e.currentTarget.value)}
           />
           <TextInput
-            label="URL da imagem (https://…)"
+            label="Imagem (URL https://... ou data:image...)"
             value={imageUrl}
             onChange={(e) => setImageUrl(e.currentTarget.value)}
           />
+          <Paper
+            p="xs"
+            withBorder
+            onPaste={onPasteImage}
+            tabIndex={0}
+            style={{ cursor: 'text' }}
+          >
+            <Text size="sm">
+              Cole imagem direta aqui com <strong>Ctrl+V</strong> (ou mantenha a URL no campo acima).
+            </Text>
+          </Paper>
+          <Group>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={onPickImageFile}
+              style={{ display: 'none' }}
+            />
+            <Button size="xs" variant="light" onClick={() => fileInputRef.current?.click()}>
+              Selecionar arquivo de imagem
+            </Button>
+          </Group>
           <TextInput
             label="URL ao clicar (https://…)"
             value={linkUrl}
@@ -175,6 +271,39 @@ export function AdminCommercials() {
   const [nOrder, setNOrder] = useState<number | ''>('');
   const [nActive, setNActive] = useState(true);
   const [creating, setCreating] = useState(false);
+  const newFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const onPasteNewImage = useCallback((event: ClipboardEvent<HTMLElement>) => {
+    const ok = readImageFromClipboard(event, (dataUrl) => {
+      setNImg(dataUrl);
+      notifications.show({
+        color: 'green',
+        title: 'Imagem colada',
+        message: 'Pronto, agora é só preencher o link e adicionar.',
+      });
+    });
+    if (!ok) {
+      notifications.show({
+        color: 'yellow',
+        title: 'Sem imagem no clipboard',
+        message: 'Copie uma imagem e cole aqui (Ctrl+V).',
+      });
+    }
+  }, []);
+
+  const onPickNewImageFile = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0];
+    if (!file) return;
+    readImageFileAsDataUrl(file, (dataUrl) => {
+      setNImg(dataUrl);
+      notifications.show({
+        color: 'green',
+        title: 'Imagem selecionada',
+        message: 'Pronto, agora é só preencher o link e adicionar.',
+      });
+    });
+    event.currentTarget.value = '';
+  }, []);
 
   const create = async () => {
     const imageUrl = nImg.trim();
@@ -183,7 +312,7 @@ export function AdminCommercials() {
       notifications.show({
         color: 'yellow',
         title: 'Preencha',
-        message: 'URL da imagem e URL do destino são obrigatórios.',
+        message: 'Imagem (URL ou colada) e URL do destino são obrigatórios.',
       });
       return;
     }
@@ -222,8 +351,7 @@ export function AdminCommercials() {
         </Text>
         <Text size="lg" fw={600}>
           Imagens públicas aparecem abaixo do menu em todas as páginas — rodamos um de cada vez (carrossél).
-          Use URLs que comecem por <strong>https://</strong> (pode hospedar a imagem no Imgur,
-          Cloudinary, disco do site, etc.).
+          Pode usar URL da imagem (https://), colar imagem com Ctrl+V ou selecionar arquivo.
         </Text>
       </div>
 
@@ -233,11 +361,34 @@ export function AdminCommercials() {
         <Stack gap="sm">
           <TextInput label="Título (opcional)" value={nTitle} onChange={(e) => setNTitle(e.currentTarget.value)} />
           <TextInput
-            label="URL da imagem"
-            placeholder="https://..."
+            label="Imagem (URL https://... ou colada)"
+            placeholder="https://... ou cole imagem no bloco abaixo"
             value={nImg}
             onChange={(e) => setNImg(e.currentTarget.value)}
           />
+          <Paper
+            p="xs"
+            withBorder
+            onPaste={onPasteNewImage}
+            tabIndex={0}
+            style={{ cursor: 'text' }}
+          >
+            <Text size="sm">
+              Clique aqui e cole uma imagem com <strong>Ctrl+V</strong>.
+            </Text>
+          </Paper>
+          <Group>
+            <input
+              ref={newFileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={onPickNewImageFile}
+              style={{ display: 'none' }}
+            />
+            <Button size="xs" variant="light" onClick={() => newFileInputRef.current?.click()}>
+              Selecionar arquivo de imagem
+            </Button>
+          </Group>
           <TextInput
             label="URL do site do anunciante"
             placeholder="https://..."
