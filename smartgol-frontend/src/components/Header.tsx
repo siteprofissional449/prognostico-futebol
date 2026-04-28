@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, NavLink } from 'react-router-dom';
 import {
   Group,
   Button,
@@ -31,17 +31,17 @@ export function Header() {
       <div className={classes.inner}>
         <Group justify="space-between" wrap="nowrap">
           <Link to="/" className={classes.logo}>
-            <Text fw={700} size="xl">SmartGol</Text>
+            <Text fw={700} size="xl" className={classes.logoText}>SmartGol</Text>
           </Link>
 
           <Group className={classes.desktopLinks} gap="md">
-            <Link to="/" className={classes.navLink}>Jogos</Link>
-            <Link to="/prognosticos" className={classes.navLink}>Palpites</Link>
+            <NavLink to="/" end className={({ isActive }) => `${classes.navLink} ${isActive ? classes.navLinkActive : ''}`}>Jogos</NavLink>
+            <NavLink to="/prognosticos" className={({ isActive }) => `${classes.navLink} ${isActive ? classes.navLinkActive : ''}`}>Palpites</NavLink>
             {isLoggedIn && canSeeHistory(plan) && (
-              <Link to="/historico" className={classes.navLink}>Histórico</Link>
+              <NavLink to="/historico" className={({ isActive }) => `${classes.navLink} ${isActive ? classes.navLinkActive : ''}`}>Histórico</NavLink>
             )}
-            <Link to="/planos" className={classes.navLink}>Planos</Link>
-            <Link to="/premium" className={classes.navLink}>VIP</Link>
+            <NavLink to="/planos" className={({ isActive }) => `${classes.navLink} ${isActive ? classes.navLinkActive : ''}`}>Planos</NavLink>
+            <NavLink to="/premium" className={({ isActive }) => `${classes.navLink} ${isActive ? classes.navLinkActive : ''}`}>VIP</NavLink>
           </Group>
 
           <Group gap="xs" className={classes.desktopActions}>
@@ -77,28 +77,38 @@ export function Header() {
           <Burger
             opened={opened}
             onClick={opened ? close : open}
-            hiddenFrom="sm"
+            hiddenFrom="md"
             size="sm"
             aria-label="Abrir menu"
           />
         </Group>
+
+        <div className={classes.mobileQuickLinks}>
+          <NavLink to="/" end className={({ isActive }) => `${classes.mobileQuickLink} ${isActive ? classes.mobileQuickLinkActive : ''}`}>Jogos</NavLink>
+          <NavLink to="/prognosticos" className={({ isActive }) => `${classes.mobileQuickLink} ${isActive ? classes.mobileQuickLinkActive : ''}`}>Palpites</NavLink>
+          {isLoggedIn && canSeeHistory(plan) && (
+            <NavLink to="/historico" className={({ isActive }) => `${classes.mobileQuickLink} ${isActive ? classes.mobileQuickLinkActive : ''}`}>Histórico</NavLink>
+          )}
+          <NavLink to="/planos" className={({ isActive }) => `${classes.mobileQuickLink} ${isActive ? classes.mobileQuickLinkActive : ''}`}>Planos</NavLink>
+          <NavLink to="/premium" className={({ isActive }) => `${classes.mobileQuickLink} ${isActive ? classes.mobileQuickLinkActive : ''}`}>VIP</NavLink>
+        </div>
 
         <Drawer
           opened={opened}
           onClose={close}
           title="Menu"
           position="right"
-          hiddenFrom="sm"
+          hiddenFrom="md"
           classNames={{ body: classes.drawerBody }}
         >
           <Stack gap="sm">
-            <Link to="/" className={classes.mobileLink} onClick={close}>Jogos</Link>
-            <Link to="/prognosticos" className={classes.mobileLink} onClick={close}>Palpites</Link>
+            <NavLink to="/" end className={({ isActive }) => `${classes.mobileLink} ${isActive ? classes.mobileLinkActive : ''}`} onClick={close}>Jogos</NavLink>
+            <NavLink to="/prognosticos" className={({ isActive }) => `${classes.mobileLink} ${isActive ? classes.mobileLinkActive : ''}`} onClick={close}>Palpites</NavLink>
             {isLoggedIn && canSeeHistory(plan) && (
-              <Link to="/historico" className={classes.mobileLink} onClick={close}>Histórico</Link>
+              <NavLink to="/historico" className={({ isActive }) => `${classes.mobileLink} ${isActive ? classes.mobileLinkActive : ''}`} onClick={close}>Histórico</NavLink>
             )}
-            <Link to="/planos" className={classes.mobileLink} onClick={close}>Planos</Link>
-            <Link to="/premium" className={classes.mobileLink} onClick={close}>VIP</Link>
+            <NavLink to="/planos" className={({ isActive }) => `${classes.mobileLink} ${isActive ? classes.mobileLinkActive : ''}`} onClick={close}>Planos</NavLink>
+            <NavLink to="/premium" className={({ isActive }) => `${classes.mobileLink} ${isActive ? classes.mobileLinkActive : ''}`} onClick={close}>VIP</NavLink>
             <Divider my="xs" />
             {isLoggedIn ? (
               <>
