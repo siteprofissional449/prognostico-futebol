@@ -296,16 +296,34 @@ export function Home() {
         )}
       </section>
 
-      <Tabs defaultValue="jogos" classNames={{ list: styles.tabsList }}>
+      <Tabs
+        defaultValue="jogos"
+        classNames={{ list: `${styles.tabsList} ${styles.tabsListResponsive}` }}
+      >
         <Tabs.List>
-          <Tabs.Tab value="jogos" leftSection={<IconCalendarEvent size={14} />}>
-            Jogos
+          <Tabs.Tab
+            value="jogos"
+            aria-label="Jogos (calendário do dia)"
+            title="Jogos"
+            leftSection={<IconCalendarEvent size={16} className={styles.tabsTabIcon} />}
+          >
+            <span className={styles.tabsTabLabel}>Jogos</span>
           </Tabs.Tab>
-          <Tabs.Tab value="resultados" leftSection={<IconChartBar size={14} />}>
-            Resultados
+          <Tabs.Tab
+            value="resultados"
+            aria-label="Resultados do dia"
+            title="Resultados"
+            leftSection={<IconChartBar size={16} className={styles.tabsTabIcon} />}
+          >
+            <span className={styles.tabsTabLabel}>Resultados</span>
           </Tabs.Tab>
-          <Tabs.Tab value="palpites" leftSection={<IconChartDots size={14} />}>
-            Palpites
+          <Tabs.Tab
+            value="palpites"
+            aria-label="Palpites do dia na lista"
+            title="Palpites"
+            leftSection={<IconChartDots size={16} className={styles.tabsTabIcon} />}
+          >
+            <span className={styles.tabsTabLabel}>Palpites</span>
           </Tabs.Tab>
         </Tabs.List>
 
