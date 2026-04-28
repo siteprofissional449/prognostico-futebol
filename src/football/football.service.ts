@@ -27,6 +27,11 @@ export interface ApiMatch {
         outcomes: Array<{ name: string; odds: string }>;
       }>
     | ApiMatchOddsCompact;
+  /**
+   * Mantém o bloco `{ homeWin, draw, awayWin }` da listagem inicial.
+   * O GET `/matches/{id}/odds` devolve várias casas — para 1×2 preferimos estas médias (mais próximas do “painel”).
+   */
+  oddsList1x2?: ApiMatchOddsCompact;
 }
 
 /** Partida com placar (resultado) - estrutura football-data.org v4 */
@@ -639,18 +644,44 @@ export class FootballService {
     );
   }
 
+  /** Guarda médias compactas antes de substituir `odds` pelo payload detalhado. */
+  private snapshotList1x2(match: ApiMatch): ApiMatchOddsCompact | undefined {
+    if (match.oddsList1x2 != null) return match.oddsList1x2;
+    const o = match.odds;
+    if (!o || typeof o !== 'object' || Array.isArray(o)) return undefined;
+    const c = o as ApiMatchOddsCompact;
+    const h = Number(c.homeWin);
+    const dr = Number(c.draw);
+    const aw = Number(c.awayWin);
+    const any = [
+      Number.isFinite(h) && h > 1,
+      Number.isFinite(dr) && dr > 1,
+      Number.isFinite(aw) && aw > 1,
+    ].some(Boolean);
+    if (!any) return undefined;
+    return {
+      homeWin: Number.isFinite(h) ? h : undefined,
+      draw: Number.isFinite(dr) ? dr : undefined,
+      awayWin: Number.isFinite(aw) ? aw : undefined,
+    };
+  }
+
   private async enrichWithOdds(match: ApiMatch): Promise<ApiMatch> {
+    const list1x2 = this.snapshotList1x2(match);
+
     try {
       const { data } = await axios.get<{ odds?: ApiMatch['odds'] }>(
         `${this.baseUrl}/matches/${match.id}/odds`,
         { headers: { 'X-Auth-Token': this.apiKey } },
       );
       const incoming = data.odds;
-      if (incoming == null) return match;
-      if (Array.isArray(incoming) && incoming.length === 0) return match;
-      return { ...match, odds: incoming };
+      if (incoming == null) return { ...match, oddsList1x2: list1x2 ?? match.oddsList1x2 };
+      if (Array.isArray(incoming) && incoming.length === 0) {
+        return { ...match, oddsList1x2: list1x2 ?? match.oddsList1x2 };
+      }
+      return { ...match, odds: incoming, oddsList1x2: list1x2 };
     } catch {
-      return match;
+      return { ...match, oddsList1x2: list1x2 ?? match.oddsList1x2 };
     }
   }
 
@@ -812,6 +843,27 @@ export class FootballService {
    * Resolve 1×2 a partir de uma lista de outcomes de um mercado.
    * A API costuma enviar "Home / Draw / Away" ou os **nomes dos clubes** + empate.
    */
+  /** Preferir médias `{ homeWin, draw, awayWin }` (listagem compacta ou snapshot). */
+  private compactOddsTo1x2(
+    c: ApiMatchOddsCompact | Record<string, unknown> | undefined,
+  ): Record<string, number | null> | null {
+    if (!c || typeof c !== 'object') return null;
+    const n = (v: unknown): number | null => {
+      if (v == null) return null;
+      const x = typeof v === 'number' ? v : Number(v);
+      if (!Number.isFinite(x) || x < 1.01) return null;
+      return x;
+    };
+    const o = c as Record<string, unknown>;
+    const HOME_WIN = n(o.homeWin ?? o.home_win);
+    const DRAW = n(o.draw);
+    const AWAY_WIN = n(o.awayWin ?? o.away_win);
+    if (HOME_WIN != null && DRAW != null && AWAY_WIN != null) {
+      return { HOME_WIN, DRAW, AWAY_WIN };
+    }
+    return null;
+  }
+
   private resolve1x2FromOutcomes(
     match: ApiMatch,
     outs: Array<{
@@ -901,18 +953,13 @@ export class FootballService {
       DRAW: null,
       AWAY_WIN: null,
     });
+    const prefList = this.compactOddsTo1x2(match.oddsList1x2);
+    if (prefList) return prefList;
+
     const raw = match.odds as unknown;
     if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
-      const o = raw as Record<string, unknown>;
-      const n = (v: unknown): number | null => {
-        const x = typeof v === 'number' ? v : Number(v);
-        return x != null && !Number.isNaN(x) && x > 0 ? x : null;
-      };
-      return {
-        HOME_WIN: n(o.homeWin ?? o.home_win),
-        DRAW: n(o.draw),
-        AWAY_WIN: n(o.awayWin ?? o.away_win),
-      };
+      const prefEmbed = this.compactOddsTo1x2(raw as Record<string, unknown>);
+      if (prefEmbed) return prefEmbed;
     }
 
     const arr = Array.isArray(raw) ? raw : [];
