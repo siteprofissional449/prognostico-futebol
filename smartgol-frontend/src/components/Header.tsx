@@ -6,7 +6,6 @@ import {
   Burger,
   Drawer,
   Stack,
-  Divider,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { IconUser, IconLogin, IconShield } from '@tabler/icons-react';
@@ -102,14 +101,6 @@ export function Header() {
           classNames={{ body: classes.drawerBody }}
         >
           <Stack gap="sm">
-            <NavLink to="/" end className={({ isActive }) => `${classes.mobileLink} ${isActive ? classes.mobileLinkActive : ''}`} onClick={close}>Jogos</NavLink>
-            <NavLink to="/prognosticos" className={({ isActive }) => `${classes.mobileLink} ${isActive ? classes.mobileLinkActive : ''}`} onClick={close}>Palpites</NavLink>
-            {isLoggedIn && canSeeHistory(plan) && (
-              <NavLink to="/historico" className={({ isActive }) => `${classes.mobileLink} ${isActive ? classes.mobileLinkActive : ''}`} onClick={close}>Histórico</NavLink>
-            )}
-            <NavLink to="/planos" className={({ isActive }) => `${classes.mobileLink} ${isActive ? classes.mobileLinkActive : ''}`} onClick={close}>Planos</NavLink>
-            <NavLink to="/premium" className={({ isActive }) => `${classes.mobileLink} ${isActive ? classes.mobileLinkActive : ''}`} onClick={close}>VIP</NavLink>
-            <Divider my="xs" />
             {isLoggedIn ? (
               <>
                 {isAdmin && (
@@ -123,6 +114,9 @@ export function Header() {
                     Admin
                   </Button>
                 )}
+                <Text size="sm" c="dimmed">
+                  Use os atalhos do topo para navegar.
+                </Text>
                 <Text size="sm" c="dimmed">
                   Plano: {plan ? planLabels[plan] ?? plan : '—'}
                 </Text>
