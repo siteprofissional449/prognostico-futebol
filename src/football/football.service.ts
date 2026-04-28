@@ -366,13 +366,21 @@ export class FootballService {
     if (!raw || typeof raw !== 'object' || !Array.isArray(raw)) return out;
     for (const book of raw) {
       const mk = String((book as { market?: string }).market || '').toUpperCase();
-      const outs =
-        (book as { outcomes?: Array<{ name: string; odds: string }> }).outcomes ||
-        [];
+      type OddOut = {
+        name?: string;
+        odds?: unknown;
+        odd?: unknown;
+        price?: unknown;
+      };
+      const outsRow = book as {
+        outcomes?: OddOut[];
+        values?: OddOut[];
+      };
+      const outs = outsRow.outcomes ?? outsRow.values ?? [];
       for (const o of outs) {
         const label = (o.name || '').replace(/\s+/g, ' ').trim();
-        const price = parseFloat(String(o.odds).replace(',', '.'));
-        if (!Number.isFinite(price) || price < 1.01) continue;
+        const price = this.parseOutcomePrice(o);
+        if (price == null) continue;
         const u = label.toUpperCase();
         const has25 = u.includes('2.5') || u.includes('2,5');
         const has15 = u.includes('1.5') || u.includes('1,5');
@@ -589,7 +597,13 @@ export class FootballService {
         );
         return withOdds;
       }
-      return withLoadedOdds;
+      if (withLoadedOdds.length < withOdds.length) {
+        this.logger.warn(
+          `Odds 1×2 carregadas em ${withLoadedOdds.length} de ${withOdds.length} jogos (${date}); incluindo todos para geração (IA onde faltar odd).`,
+        );
+      }
+      /** Não filtrar só os com payload: isso limitava a N jogos se só N tivessem odds (ex.: 2 de 15). */
+      return withOdds;
     } catch (e) {
       this.logger.warn(
         `Football-Data (matches+odds) falhou para ${date}: ${
@@ -773,7 +787,120 @@ export class FootballService {
     ];
   }
 
+  private parseOutcomePrice(o?: {
+    odds?: unknown;
+    odd?: unknown;
+    price?: unknown;
+  }): number | null {
+    if (!o) return null;
+    const raw = o.odds ?? o.odd ?? o.price;
+    if (raw == null) return null;
+    const x = Number(String(raw).replace(',', '.'));
+    if (!Number.isFinite(x) || x < 1.01) return null;
+    return x;
+  }
+
+  private normOddsLabel(name: unknown): string {
+    return String(name ?? '')
+      .trim()
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+  }
+
+  /**
+   * Resolve 1×2 a partir de uma lista de outcomes de um mercado.
+   * A API costuma enviar "Home / Draw / Away" ou os **nomes dos clubes** + empate.
+   */
+  private resolve1x2FromOutcomes(
+    match: ApiMatch,
+    outs: Array<{
+      name?: string;
+      odds?: unknown;
+      odd?: unknown;
+      price?: unknown;
+    }>,
+  ): Record<string, number | null> | null {
+    if (outs.length < 3) return null;
+    const homeTeam = this.normOddsLabel(match.homeTeam?.name ?? '');
+    const awayTeam = this.normOddsLabel(match.awayTeam?.name ?? '');
+
+    let h: number | null = null;
+    let d: number | null = null;
+    let a: number | null = null;
+
+    for (const o of outs) {
+      const price = this.parseOutcomePrice(o);
+      if (price == null) continue;
+      const lbl = this.normOddsLabel(o.name ?? '');
+      if (/^(home|casa|1)$/.test(lbl) || lbl === '1') {
+        h = h == null ? price : Math.max(h, price);
+      } else if (/^(draw|empate|x)$/.test(lbl) || lbl === 'x') {
+        d = d == null ? price : Math.max(d, price);
+      } else if (/^(away|fora|2)$/.test(lbl) || lbl === '2') {
+        a = a == null ? price : Math.max(a, price);
+      }
+    }
+
+    if (h != null && d != null && a != null) {
+      return { HOME_WIN: h, DRAW: d, AWAY_WIN: a };
+    }
+
+    const drawIx = outs.findIndex((o) =>
+      /\b(draw|empate)\b/i.test(String(o.name ?? '')) ||
+      /^x$/i.test(String(o.name ?? '').trim()),
+    );
+    if (drawIx >= 0) {
+      const dPrice = this.parseOutcomePrice(outs[drawIx]);
+      if (dPrice != null) d = dPrice;
+      const rest = outs.filter((_, i) => i !== drawIx);
+      if (rest.length === 2 && homeTeam.length && awayTeam.length) {
+        const overlap = (label: string, team: string) => {
+          if (!label || !team) return 0;
+          if (label.includes(team.slice(0, 12)) || team.includes(label.slice(0, 12)))
+            return 2;
+          return 0;
+        };
+        const o0 = rest[0];
+        const o1 = rest[1];
+        const l0 = this.normOddsLabel(o0.name ?? '');
+        const l1 = this.normOddsLabel(o1.name ?? '');
+        const s0h = overlap(l0, homeTeam);
+        const s0a = overlap(l0, awayTeam);
+        const s1h = overlap(l1, homeTeam);
+        const s1a = overlap(l1, awayTeam);
+        const p0 = this.parseOutcomePrice(o0);
+        const p1 = this.parseOutcomePrice(o1);
+        if (p0 != null && p1 != null) {
+          if (s0h + s1a > s0a + s1h) {
+            h = p0;
+            a = p1;
+          } else if (s0a + s1h > s0h + s1a) {
+            a = p0;
+            h = p1;
+          } else if (s0h > s0a && s1a > s1h) {
+            h = p0;
+            a = p1;
+          } else if (s0a > s0h && s1h > s1a) {
+            a = p0;
+            h = p1;
+          }
+        }
+      }
+    }
+
+    if (h != null && d != null && a != null) {
+      return { HOME_WIN: h, DRAW: d, AWAY_WIN: a };
+    }
+    return null;
+  }
+
   private extractOddsMap(match: ApiMatch): Record<string, number | null> {
+    const empty = (): Record<string, number | null> => ({
+      HOME_WIN: null,
+      DRAW: null,
+      AWAY_WIN: null,
+    });
     const raw = match.odds as unknown;
     if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
       const o = raw as Record<string, unknown>;
@@ -787,17 +914,64 @@ export class FootballService {
         AWAY_WIN: n(o.awayWin ?? o.away_win),
       };
     }
+
     const arr = Array.isArray(raw) ? raw : [];
-    const outcomes = arr.flatMap((x) =>
-      x && Array.isArray(x.outcomes) ? x.outcomes : [],
-    );
-    const home = outcomes.find((x) => x.name === 'Home');
-    const draw = outcomes.find((x) => x.name === 'Draw');
-    const away = outcomes.find((x) => x.name === 'Away');
-    return {
-      HOME_WIN: home ? parseFloat(home.odds) : null,
-      DRAW: draw ? parseFloat(draw.odds) : null,
-      AWAY_WIN: away ? parseFloat(away.odds) : null,
-    };
+    for (const bk of arr) {
+      if (!bk || typeof bk !== 'object') continue;
+      const row = bk as {
+        outcomes?: Array<{
+          name?: string;
+          odds?: unknown;
+          odd?: unknown;
+          price?: unknown;
+        }>;
+        values?: Array<{
+          name?: string;
+          odds?: unknown;
+          odd?: unknown;
+          price?: unknown;
+        }>;
+      };
+      const outs =
+        Array.isArray(row.outcomes)
+          ? row.outcomes
+          : Array.isArray(row.values)
+            ? row.values
+            : null;
+      if (!outs || outs.length < 3) continue;
+      const resolved = this.resolve1x2FromOutcomes(match, outs);
+      if (
+        resolved &&
+        resolved.HOME_WIN != null &&
+        resolved.DRAW != null &&
+        resolved.AWAY_WIN != null
+      ) {
+        return resolved;
+      }
+    }
+
+    const flat = arr.flatMap((x) => {
+      if (
+        x &&
+        typeof x === 'object' &&
+        Array.isArray((x as { outcomes?: unknown[] }).outcomes)
+      ) {
+        return (x as { outcomes: Array<{ name?: string; odds?: unknown; odd?: unknown; price?: unknown }> }).outcomes;
+      }
+      return [];
+    });
+    if (flat.length >= 3) {
+      const r = this.resolve1x2FromOutcomes(match, flat);
+      if (
+        r &&
+        r.HOME_WIN != null &&
+        r.DRAW != null &&
+        r.AWAY_WIN != null
+      ) {
+        return r;
+      }
+    }
+
+    return empty();
   }
 }
