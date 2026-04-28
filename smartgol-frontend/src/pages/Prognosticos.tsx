@@ -19,16 +19,10 @@ import { GameCard } from '../components/GameCard';
 import { PremiumLockCard } from '../components/PremiumLockCard';
 import { PremiumPrognosticCard } from '../components/PremiumPrognosticCard';
 import type { AdminPrognostic, PredictionView } from '../types';
-
-function todayISO() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function addDays(dateStr: string, delta: number): string {
-  const d = new Date(dateStr + 'T12:00:00Z');
-  d.setUTCDate(d.getUTCDate() + delta);
-  return d.toISOString().slice(0, 10);
-}
+import {
+  todayYMDInAppTimezone as todayISO,
+  addCalendarDaysYMD as addDays,
+} from '../utils/appDate';
 
 function formatDateLabel(dateStr: string) {
   try {

@@ -15,10 +15,7 @@ import { useDisclosure } from '@mantine/hooks';
 import { IconSparkles, IconTrash } from '@tabler/icons-react';
 import { adminClearPredictions, adminGeneratePredictions, getAdminStats } from '../api/admin';
 import { notifications } from '@mantine/notifications';
-
-function todayISO() {
-  return new Date().toISOString().slice(0, 10);
-}
+import { todayYMDInAppTimezone as todayISO } from '../utils/appDate';
 
 export function AdminDashboard() {
   const [stats, setStats] = useState<{ userCount: number; predictionCount: number } | null>(null);
