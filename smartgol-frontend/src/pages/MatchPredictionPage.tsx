@@ -248,7 +248,7 @@ export function MatchPredictionPage() {
         </p>
       </header>
 
-      <Stack gap="xl">
+      <Stack gap="md">
         <section aria-labelledby="sec-analise">
           <h2 id="sec-analise" className={styles.h2Semantic}>
             Análise do confronto
@@ -262,17 +262,15 @@ export function MatchPredictionPage() {
               ))}
             </div>
           : prediction.locked ?
-            <Alert color="violet">
-              Esta análise textual completa é premium. Planeia o teu acesso aos palpites com plano compatível.
-              <Anchor component={Link} to="/planos" display="block" mt="xs" fw={600}>
-                Ver planos
+            <Alert color="violet" p="sm">
+              Texto integral premium — vê{' '}
+              <Anchor component={Link} to="/planos" fw={600}>
+                planos
               </Anchor>
+              .
             </Alert>
           : null}
 
-          <Text size="xs" fw={600} tt="uppercase" c="dimmed" mb="xs" mt={showFullAnalysis ? 'md' : 0}>
-            Visão do modelo — contexto
-          </Text>
           <div className={styles.sectionBody}>
             {generatedAnalysis.map((para, i) => (
               <p key={`g-${i}`} className={styles.paraMuted}>
@@ -282,15 +280,14 @@ export function MatchPredictionPage() {
           </div>
         </section>
 
-        <Divider color="dark.6" />
+        <Divider color="dark.6" variant="dashed" my={4} />
 
         <section aria-labelledby="sec-stats">
           <h2 id="sec-stats" className={styles.h2Semantic}>
             Estatísticas e momento das equipas
           </h2>
           <p className={styles.paraMuted}>
-            Sintetizamos probabilidades relativas aos mercados destacados pela nossa ferramenta, cruzadas com dados de
-            jogo sempre que a feed desportiva estiver disponível.
+            Probabilidades do modelo cruzadas com dados do jogo quando a API responder.
           </p>
 
           <div className={styles.statGrid}>
@@ -330,8 +327,8 @@ export function MatchPredictionPage() {
             )}
           </div>
           {!matchDetail && !detailErr && (
-            <Text size="xs" c="dimmed" mt="sm">
-              Ligação aos detalhes do encontro (ID {prediction.matchId}) quando a API partilhar ficha técnica.
+            <Text size="xs" c="dimmed" mt={6}>
+              Ficha do encontro: ID {prediction.matchId}.
             </Text>
           )}
           {detailErr && (
@@ -376,7 +373,7 @@ export function MatchPredictionPage() {
           )}
         </section>
 
-        <Divider color="dark.6" />
+        <Divider color="dark.6" variant="dashed" my={4} />
 
         <section aria-labelledby="sec-h2h">
           <h2 id="sec-h2h" className={styles.h2Semantic}>
@@ -387,33 +384,27 @@ export function MatchPredictionPage() {
           </p>
         </section>
 
-        <Divider color="dark.6" />
+        <Divider color="dark.6" variant="dashed" my={4} />
 
         <section aria-labelledby="sec-final">
           <h2 id="sec-final" className={styles.h2Semantic}>
             Previsão final
           </h2>
-          <Stack gap="sm">
+          <Stack gap="xs">
             <Text size="sm" className={styles.paraMuted} component="p">
               <strong style={{ color: 'var(--app-text-muted)' }}>Mercado:</strong>{' '}
               {marketLabel(prediction.market ?? null)}
+              {prediction.bestBet?.trim() ? (
+                <>
+                  {' '}
+                  · <strong>Sugestão:</strong> {prediction.bestBet}
+                </>
+              ) : null}
+              {prediction.confidence != null && Number.isFinite(Number(prediction.confidence)) ?
+                ` · Confiança ${Number(prediction.confidence).toFixed(1)}/10.`
+              : null}{' '}
+              Apenas entretenimento; joga com responsabilidade.
             </Text>
-            {prediction.bestBet?.trim() && (
-              <Text size="sm" className={styles.paraMuted} component="p">
-                <strong style={{ color: 'var(--app-text-muted)' }}>Ideia pragmática:</strong>{' '}
-                {prediction.bestBet}
-              </Text>
-            )}
-            <Text size="sm" className={styles.paraMuted} component="p">
-              O combinado probabilístico reforça a leitura de matriz de risco/retorno: aposta apenas com responsabilidade
-              e dentro do teu budget.
-            </Text>
-            {prediction.confidence != null && Number.isFinite(Number(prediction.confidence)) && (
-              <Text size="sm" className={styles.paraMuted} component="p">
-                <strong style={{ color: 'var(--app-text-muted)' }}>Robustez combinada:</strong>{' '}
-                {Number(prediction.confidence).toFixed(1)} / 10
-              </Text>
-            )}
           </Stack>
         </section>
 

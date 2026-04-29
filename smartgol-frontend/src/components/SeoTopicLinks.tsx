@@ -22,23 +22,23 @@ export function SeoTopicLinks({ homeTeam, awayTeam, leagueName }: Props) {
       <Text size="xs" c="dimmed" tt="uppercase" fw={600} mb="xs">
         Ver também
       </Text>
-      <Group gap="xs" wrap="wrap">
-        <Anchor component={Link} to="/prognosticos" size="sm" c="dimmed">
-          Prognósticos e palpites de hoje
+      <Group gap={6} wrap="wrap">
+        <Anchor component={Link} to="/prognosticos" size="xs" c="dimmed">
+          Palpites hoje
         </Anchor>
         <Text span size="sm" c="dimmed">
           ·
         </Text>
-        <Anchor component={Link} to="/planos" size="sm" c="dimmed">
-          Planos SmartGol
+        <Anchor component={Link} to="/planos" size="xs" c="dimmed">
+          Planos
         </Anchor>
         {home && (
           <>
             <Text span size="sm" c="dimmed">
               ·
             </Text>
-            <Anchor component={Link} to={`/equipa/${slugifyTeam(home)}`} size="sm" c="dimmed">
-              Página {home} (equipa)
+            <Anchor component={Link} to={`/equipa/${slugifyTeam(home)}`} size="xs" c="dimmed">
+              Equipa casa
             </Anchor>
           </>
         )}
@@ -47,8 +47,8 @@ export function SeoTopicLinks({ homeTeam, awayTeam, leagueName }: Props) {
             <Text span size="sm" c="dimmed">
               ·
             </Text>
-            <Anchor component={Link} to={`/equipa/${slugifyTeam(away)}`} size="sm" c="dimmed">
-              Página {away} (equipa)
+            <Anchor component={Link} to={`/equipa/${slugifyTeam(away)}`} size="xs" c="dimmed">
+              Equipa fora
             </Anchor>
           </>
         )}
@@ -57,15 +57,15 @@ export function SeoTopicLinks({ homeTeam, awayTeam, leagueName }: Props) {
             <Text span size="sm" c="dimmed">
               ·
             </Text>
-            <Anchor component={Link} to={`/liga/${leagueSlug(lg)}`} size="sm" c="dimmed">
-              Competição {lg}
+            <Anchor component={Link} to={`/liga/${leagueSlug(lg)}`} size="xs" c="dimmed">
+              {lg}
             </Anchor>
           </>
         )}
         <Text span size="sm" c="dimmed">
           ·
         </Text>
-        <Anchor component={Link} to="/informacao/jogo-responsavel" size="sm" c="dimmed">
+        <Anchor component={Link} to="/informacao/jogo-responsavel" size="xs" c="dimmed">
           Jogo responsável
         </Anchor>
       </Group>

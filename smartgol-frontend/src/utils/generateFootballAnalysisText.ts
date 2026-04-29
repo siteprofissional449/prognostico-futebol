@@ -22,36 +22,32 @@ export function generateFootballAnalysisParagraphs(
   const gH = md?.homeScore;
   const gA = md?.awayScore;
 
-  let goalsLine =
+  let goalsPhrase =
     md != null &&
     typeof gH === 'number' &&
     typeof gA === 'number' &&
     !Number.isNaN(gH) &&
     !Number.isNaN(gA)
-      ? `Neste cenário já jogado ou em curso, o placar registado até agora foi ${home} ${gH} × ${gA} ${away}. Isso sintetiza a dinâmica ofensiva e defensiva instantânea.`
-      : `Sem placar oficial consolidado nos nossos dados neste momento, o foco recai sobre o que os modelos probabilísticos e o momento da competição sugerem para o confronto.`;
+      ? `Placar até agora: ${gH} × ${gA}.`
+      : '';
 
   const mkt = marketLabel(p.market ?? null);
-  const p1 = `${home} recebe ${away}${lg ? ` na ${lg}` : ''}; trata‑se de um confronto onde o cenário táctico típico (transições e ritmo das duas formações) pesa forte na leitura. ${goalsLine}`;
+  const conf =
+    typeof p.confidence === 'number' && Number.isFinite(p.confidence) ?
+      ` Confiança do modelo (${Number(p.confidence).toFixed(1)}/10) não é garantia de resultado.`
+    : '';
+
+  const p1 = `${home} contra ${away}${lg ? ` · ${lg}` : ''}. ${goalsPhrase} Leitura tática combinada com o mercado destacado (${mkt}).`;
 
   const p2 =
-    `A tendência probabilística atual aponta ` +
-    `${fmtProb(p.probHome)} para resultado favorável a ${home}, ` +
-    `${fmtProb(p.probDraw)} para empate e ` +
-    `${fmtProb(p.probAway)} para resultado favorável a ${away}. Estes valores traduzem a forma recente e o equilíbrio implícito do mercado de ${mkt}.`;
+    `Probabilidades de referência: ${home} (${fmtProb(p.probHome)}), empate (${fmtProb(p.probDraw)}), ${away} (${fmtProb(p.probAway)}).${conf}`;
 
-  let p3 = `Em termos de forma, o cenário combinado sugere duelo disputado onde pequenas ausências ou desgaste físico ao longo do calendário podem decidir períodos‑chave.`;
-  if (typeof p.confidence === 'number' && Number.isFinite(p.confidence)) {
-    p3 += ` O grau de confiança combinado do modelo (nota até 10: ${Number(p.confidence).toFixed(1)}) deve ser lidos como probabilidade técnica, não promessa — jogo sempre imprevisível dentro das quatro linhas.`;
-  }
-
-  return [p1, p2, p3].filter(Boolean);
+  return [p1, p2].filter((x) => x.replace(/\s/g, '').length > 0);
 }
 
 /** Um parágrafo sintético de “confrontos diretos” quando não há API H2H (placeholder honesto). */
 export function generateH2HNarrativeParagraph(homeTeam: string, awayTeam: string): string {
   return (
-    `${homeTeam} e ${awayTeam} cruzam-se num cenário onde o resultado recente pode iludir sobre equilíbrio real entre estilos: empates cerrados ou vitórias apertadas costumam ser frequentes quando as equipas já se estudam no calendário. ` +
-    `Para profundidade estatística de confrontos diretos (últimos 5 anos, casa/fora ou competição‑a‑competição), o ideal é complementar esta leitura com dados completos quando integrados ao serviço.`
+    `${homeTeam} e ${awayTeam}: confrontos repetidos ao longo do calendário costumam apertar marcadores; para histórico H2H detalhado, complementa em fontes de estatísticas oficiais.`
   );
 }

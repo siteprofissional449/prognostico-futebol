@@ -14,8 +14,8 @@ export function SiteFooter() {
   return (
     <footer className={classes.footer} role="contentinfo">
       <Box className={classes.inner}>
-        <Stack gap="xl">
-          <Divider color="dark.5" />
+        <Stack gap="md">
+          <Divider color="dark.5" variant="dashed" />
 
           {/* Jogo responsável — alinhamento com mensagens institucionais / IBJR */}
           <Stack gap="xs" align="center" className={classes.responsibleBlock}>
@@ -33,12 +33,12 @@ export function SiteFooter() {
                 size="xs"
                 className={classes.ibjrLink}
               >
-                IBJR — Instituto Brasileiro de Jogo Responsável
+                IBJR
               </Anchor>
             </Group>
           </Stack>
 
-          <Divider color="dark.5" />
+          <Divider color="dark.5" variant="dashed" />
 
           {/* Links institucionais */}
           <nav className={classes.nav} aria-label="Informações institucionais">

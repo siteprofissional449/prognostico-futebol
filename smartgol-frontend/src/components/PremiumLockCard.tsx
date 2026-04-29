@@ -41,8 +41,8 @@ export function PremiumLockCard({ p }: { p: PredictionView }) {
             Ver mais prognósticos
           </Button>
           {seoPath && (
-            <Button component={Link} to={seoPath} variant="default" color="green" size="sm">
-              Página do palpite (resumo SEO)
+            <Button component={Link} to={seoPath} variant="default" color="green" size="xs">
+              Ver página do palpite
             </Button>
           )}
         </Group>
