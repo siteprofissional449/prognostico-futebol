@@ -30,6 +30,9 @@ const AdminPrognosticos = lazy(() =>
 const AdminCommercials = lazy(() =>
   import('./pages/AdminCommercials').then((m) => ({ default: m.AdminCommercials })),
 );
+const Informacao = lazy(() =>
+  import('./pages/Informacao').then((m) => ({ default: m.Informacao })),
+);
 
 function PageLoadingFallback() {
   return (
@@ -55,6 +58,7 @@ function App() {
                 <Route path="planos" element={<Planos />} />
                 <Route path="prognosticos" element={<Prognosticos />} />
                 <Route path="historico" element={<HistoricoAcertos />} />
+                <Route path="informacao/:slug" element={<Informacao />} />
                 <Route path="admin" element={<AdminRouteGuard />}>
                   <Route element={<AdminShell />}>
                     <Route index element={<AdminDashboard />} />

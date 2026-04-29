@@ -1,0 +1,64 @@
+.footer {
+  margin-top: auto;
+  padding: 2rem 1rem 2.5rem;
+  background: var(--app-surface, #111827);
+  border-top: 1px solid var(--app-border);
+}
+
+.inner {
+  margin: 0 auto;
+  max-width: 1200px;
+}
+
+.responsibleBlock {
+  text-align: center;
+}
+
+.ageBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.65rem;
+  height: 2.65rem;
+  border-radius: 50%;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--mantine-color-gray-3);
+  border: 2px solid var(--mantine-color-gray-6);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.ibjrLink {
+  color: var(--mantine-color-blue-3);
+}
+
+.ibjrLink:hover {
+  color: var(--mantine-color-blue-2);
+}
+
+.nav {
+  width: 100%;
+}
+
+.linkWrap {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.65rem 0.95rem;
+  row-gap: 0.85rem;
+}
+
+.link {
+  color: var(--mantine-color-gray-4);
+}
+
+.link:hover {
+  color: var(--mantine-color-green-4);
+}
+
+/* tema/breakpoints.ts — themeBreakpoints.sm: barra fixa inferior */
+@media (max-width: calc(48em - 0.01em)) {
+  .footer {
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+  }
+}
