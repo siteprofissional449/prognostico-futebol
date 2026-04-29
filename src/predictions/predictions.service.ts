@@ -188,6 +188,26 @@ export class PredictionsService {
     }
   }
 
+  /**
+   * Antes: um await por dia (N round-trips HTTP em série). Aqui: lotes paralelos
+   * + cache em getResultsOfDay — first load do histórico fica muito mais rápido.
+   */
+  private async loadResultsForMultipleDates(
+    dates: string[],
+    batchSize = 5,
+  ): Promise<Map<string, Map<string, MatchResultDto>>> {
+    const unique = [...new Set(dates)];
+    const out = new Map<string, Map<string, MatchResultDto>>();
+    for (let i = 0; i < unique.length; i += batchSize) {
+      const chunk = unique.slice(i, i + batchSize);
+      const batchMaps = await Promise.all(
+        chunk.map((d) => this.loadResultsForDate(d)),
+      );
+      chunk.forEach((d, j) => out.set(d, batchMaps[j]));
+    }
+    return out;
+  }
+
   private matchDateToYmd(d: Date | string): string {
     const x = d instanceof Date ? d : new Date(d);
     return Number.isNaN(x.getTime()) ? this.today() : x.toISOString().slice(0, 10);
@@ -491,6 +511,8 @@ export class PredictionsService {
     const dateKeys = new Set<string>([...byDate.keys(), ...byDateProg.keys()]);
     const sortedDates = [...dateKeys].sort((a, b) => (a < b ? 1 : -1));
 
+    const resultsByDay = await this.loadResultsForMultipleDates(sortedDates);
+
     const days: PredictionsHistoryDayDto[] = [];
     for (const d of sortedDates) {
       const list = (byDate.get(d) || []).filter(
@@ -499,7 +521,7 @@ export class PredictionsService {
       const progList = byDateProg.get(d) || [];
       if (list.length === 0 && progList.length === 0) continue;
 
-      const resultsMap = await this.loadResultsForDate(d);
+      const resultsMap = resultsByDay.get(d) ?? new Map();
       const resultsList = [...resultsMap.values()];
       const resultsByTeam = this.indexResultsByTeamPair(resultsList);
 

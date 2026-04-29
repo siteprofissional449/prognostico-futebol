@@ -13,6 +13,7 @@ import { useDisclosure } from '@mantine/hooks';
 import { IconUser, IconLogin, IconShield } from '@tabler/icons-react';
 import { useAuth } from '../contexts/AuthContext';
 import { canSeeHistory } from '../utils/planAccess';
+import { historicoPrefetchHandlers } from '../utils/prefetchRoutes';
 import classes from './Header.module.css';
 
 const planLabels: Record<string, string> = {
@@ -39,7 +40,13 @@ export function Header() {
             <NavLink to="/" end className={({ isActive }) => `${classes.navLink} ${isActive ? classes.navLinkActive : ''}`}>Jogos</NavLink>
             <NavLink to="/prognosticos" className={({ isActive }) => `${classes.navLink} ${isActive ? classes.navLinkActive : ''}`}>Palpites</NavLink>
             {isLoggedIn && canSeeHistory(plan) && (
-              <NavLink to="/historico" className={({ isActive }) => `${classes.navLink} ${isActive ? classes.navLinkActive : ''}`}>Histórico</NavLink>
+              <NavLink
+                to="/historico"
+                {...historicoPrefetchHandlers}
+                className={({ isActive }) => `${classes.navLink} ${isActive ? classes.navLinkActive : ''}`}
+              >
+                Histórico
+              </NavLink>
             )}
             <NavLink to="/planos" className={({ isActive }) => `${classes.navLink} ${isActive ? classes.navLinkActive : ''}`}>Planos</NavLink>
             <NavLink to="/premium" className={({ isActive }) => `${classes.navLink} ${isActive ? classes.navLinkActive : ''}`}>VIP</NavLink>
@@ -90,7 +97,13 @@ export function Header() {
           <NavLink to="/" end className={({ isActive }) => `${classes.mobileQuickLink} ${isActive ? classes.mobileQuickLinkActive : ''}`}>Jogos</NavLink>
           <NavLink to="/prognosticos" className={({ isActive }) => `${classes.mobileQuickLink} ${isActive ? classes.mobileQuickLinkActive : ''}`}>Palpites</NavLink>
           {isLoggedIn && canSeeHistory(plan) && (
-            <NavLink to="/historico" className={({ isActive }) => `${classes.mobileQuickLink} ${isActive ? classes.mobileQuickLinkActive : ''}`}>Histórico</NavLink>
+            <NavLink
+              to="/historico"
+              {...historicoPrefetchHandlers}
+              className={({ isActive }) => `${classes.mobileQuickLink} ${isActive ? classes.mobileQuickLinkActive : ''}`}
+            >
+              Histórico
+            </NavLink>
           )}
           <NavLink to="/planos" className={({ isActive }) => `${classes.mobileQuickLink} ${isActive ? classes.mobileQuickLinkActive : ''}`}>Planos</NavLink>
           <NavLink to="/premium" className={({ isActive }) => `${classes.mobileQuickLink} ${isActive ? classes.mobileQuickLinkActive : ''}`}>VIP</NavLink>
@@ -112,7 +125,14 @@ export function Header() {
             <NavLink to="/" end onClick={close} className={({ isActive }) => `${classes.mobileLink} ${isActive ? classes.mobileLinkActive : ''}`}>Jogos</NavLink>
             <NavLink to="/prognosticos" onClick={close} className={({ isActive }) => `${classes.mobileLink} ${isActive ? classes.mobileLinkActive : ''}`}>Palpites</NavLink>
             {isLoggedIn && canSeeHistory(plan) && (
-              <NavLink to="/historico" onClick={close} className={({ isActive }) => `${classes.mobileLink} ${isActive ? classes.mobileLinkActive : ''}`}>Histórico</NavLink>
+              <NavLink
+                to="/historico"
+                onClick={close}
+                {...historicoPrefetchHandlers}
+                className={({ isActive }) => `${classes.mobileLink} ${isActive ? classes.mobileLinkActive : ''}`}
+              >
+                Histórico
+              </NavLink>
             )}
             <NavLink to="/planos" onClick={close} className={({ isActive }) => `${classes.mobileLink} ${isActive ? classes.mobileLinkActive : ''}`}>Planos</NavLink>
             <NavLink to="/premium" onClick={close} className={({ isActive }) => `${classes.mobileLink} ${isActive ? classes.mobileLinkActive : ''}`}>VIP</NavLink>

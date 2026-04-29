@@ -8,6 +8,7 @@ import {
   INFORMACAO_TITULOS,
   isInformacaoSlug,
 } from '../routes/informacaoRoutes';
+import { historicoPrefetchHandlers } from '../utils/prefetchRoutes';
 
 /**
  * Placeholder institucional. Substitui por texto final / CMS quando disponível.
@@ -52,7 +53,13 @@ export function Informacao() {
             </Text>
             <Stack gap={6}>
               {mainLinks.map(({ to, label }) => (
-                <Anchor key={to} component={Link} to={to} size="sm">
+                <Anchor
+                  key={to}
+                  component={Link}
+                  to={to}
+                  size="sm"
+                  {...(to === '/historico' ? historicoPrefetchHandlers : {})}
+                >
                   {label}
                 </Anchor>
               ))}

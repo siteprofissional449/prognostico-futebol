@@ -126,6 +126,13 @@ export class FootballService {
   >();
   private readonly scheduleTtlMs: number;
 
+  /** Placares FINISHED por dia (histórico / green-red). TTL longo — jogos antigos não mudam. */
+  private finishedResultsByDate = new Map<
+    string,
+    { data: MatchResultDto[]; fetchedAt: number }
+  >();
+  private readonly finishedResultsTtlMs: number;
+
   /** IN_PLAY + PAUSED nas ligas configuradas. */
   private liveCache: { items: LiveMatchViewDto[]; fetchedAt: number } | null =
     null;
@@ -155,6 +162,13 @@ export class FootballService {
       Number.isFinite(ttlH) && ttlH > 0
         ? ttlH * 60 * 60 * 1000
         : 6 * 60 * 60 * 1000;
+    const finishedH = Number(
+      this.config.get<string>('FOOTBALL_FINISHED_RESULTS_CACHE_HOURS'),
+    );
+    this.finishedResultsTtlMs =
+      Number.isFinite(finishedH) && finishedH > 0
+        ? finishedH * 60 * 60 * 1000
+        : 24 * 60 * 60 * 1000;
     this.logger.log(
       `Football-data: ${this.competitionIds.length} competição(ões); odds até ${this.maxMatchesOddsEnrich} jogos (lotes ${this.oddsBatchSize}, pausa ${this.oddsBatchPauseMs}ms)`,
     );
@@ -168,8 +182,22 @@ export class FootballService {
   async getResultsOfDay(date?: string): Promise<MatchResultDto[]> {
     const targetDate = date || this.predictionsService.today();
     if (!this.apiKey) return this.getMockResults(targetDate);
+    const hit = this.finishedResultsByDate.get(targetDate);
+    if (hit && Date.now() - hit.fetchedAt < this.finishedResultsTtlMs) {
+      return hit.data;
+    }
     const matches = await this.fetchMatchesByStatus(targetDate, 'FINISHED');
-    return matches.map((m) => this.toMatchResultDto(m));
+    const data = matches.map((m) => this.toMatchResultDto(m));
+    this.finishedResultsByDate.set(targetDate, { data, fetchedAt: Date.now() });
+    if (this.finishedResultsByDate.size > 120) {
+      const oldest = [...this.finishedResultsByDate.entries()].sort(
+        (a, b) => a[1].fetchedAt - b[1].fetchedAt,
+      );
+      for (const [k] of oldest.slice(0, oldest.length - 120)) {
+        this.finishedResultsByDate.delete(k);
+      }
+    }
+    return data;
   }
 
   /**

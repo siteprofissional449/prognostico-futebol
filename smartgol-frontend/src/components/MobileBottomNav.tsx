@@ -10,6 +10,7 @@ import {
 } from '@tabler/icons-react';
 import { useAuth } from '../contexts/AuthContext';
 import { canSeeHistory } from '../utils/planAccess';
+import { historicoPrefetchHandlers } from '../utils/prefetchRoutes';
 import classes from './MobileBottomNav.module.css';
 
 export function MobileBottomNav() {
@@ -54,6 +55,7 @@ export function MobileBottomNav() {
       {showHistory && (
         <NavLink
           to="/historico"
+          {...historicoPrefetchHandlers}
           aria-label="Histórico"
           title="Histórico"
           className={({ isActive }) =>
