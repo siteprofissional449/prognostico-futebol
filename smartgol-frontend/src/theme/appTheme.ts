@@ -1,10 +1,14 @@
 import { createTheme, rem } from '@mantine/core';
+import { themeBreakpoints } from './breakpoints';
 
 /**
  * Design system — SaaS premium (fundo #0B0F14, cards #111827, destaque #22C55E).
  * Grid de base 8px; raios 12–16px.
+ *
+ * Ruturas: theme/breakpoints.ts (fonte de verdade, partilhada com CSS e useMediaQuery).
  */
 export const appTheme = createTheme({
+  breakpoints: themeBreakpoints,
   primaryColor: 'green',
   defaultRadius: 'md',
   fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',

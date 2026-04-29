@@ -1,5 +1,6 @@
 import { Link, NavLink } from 'react-router-dom';
 import {
+  Box,
   Group,
   Button,
   Text,
@@ -7,10 +8,11 @@ import {
   Drawer,
   Stack,
 } from '@mantine/core';
-import { useDisclosure } from '@mantine/hooks';
+import { useDisclosure, useMediaQuery } from '@mantine/hooks';
 import { IconUser, IconLogin, IconShield } from '@tabler/icons-react';
 import { useAuth } from '../contexts/AuthContext';
 import { canSeeHistory } from '../utils/planAccess';
+import { mediaQueryBelow } from '../theme/breakpoints';
 import classes from './Header.module.css';
 
 const planLabels: Record<string, string> = {
@@ -24,6 +26,8 @@ const planLabels: Record<string, string> = {
 export function Header() {
   const { isLoggedIn, plan, isAdmin, logout } = useAuth();
   const [opened, { open, close }] = useDisclosure(false);
+  /** Igual ao breakpoint `sm` (barra inferior, padding layout, etc.). */
+  const hasBottomIconsNav = useMediaQuery(mediaQueryBelow('sm'));
 
   return (
     <header className={classes.header}>
@@ -33,7 +37,7 @@ export function Header() {
             <Text fw={700} size="xl" className={classes.logoText}>SmartGol</Text>
           </Link>
 
-          <Group className={classes.desktopLinks} gap="md">
+          <Box visibleFrom="md" component={Group} gap="md" wrap="nowrap">
             <NavLink to="/" end className={({ isActive }) => `${classes.navLink} ${isActive ? classes.navLinkActive : ''}`}>Jogos</NavLink>
             <NavLink to="/prognosticos" className={({ isActive }) => `${classes.navLink} ${isActive ? classes.navLinkActive : ''}`}>Palpites</NavLink>
             {isLoggedIn && canSeeHistory(plan) && (
@@ -41,9 +45,9 @@ export function Header() {
             )}
             <NavLink to="/planos" className={({ isActive }) => `${classes.navLink} ${isActive ? classes.navLinkActive : ''}`}>Planos</NavLink>
             <NavLink to="/premium" className={({ isActive }) => `${classes.navLink} ${isActive ? classes.navLinkActive : ''}`}>VIP</NavLink>
-          </Group>
+          </Box>
 
-          <Group gap="xs" className={classes.desktopActions}>
+          <Box visibleFrom="md" component={Group} gap="xs" wrap="nowrap">
             {isLoggedIn ? (
               <>
                 {isAdmin && (
@@ -58,7 +62,7 @@ export function Header() {
                     Admin
                   </Button>
                 )}
-                <Group gap={6} className={classes.planBadge}>
+                <Group gap={6} className={classes.planBadge} wrap="nowrap">
                   <IconUser size={16} />
                   <Text size="sm" c="dimmed">
                     {plan ? planLabels[plan] ?? plan : '—'}
@@ -71,7 +75,7 @@ export function Header() {
                 Entrar
               </Button>
             )}
-          </Group>
+          </Box>
 
           <Burger
             opened={opened}
@@ -82,7 +86,8 @@ export function Header() {
           />
         </Group>
 
-        <div className={classes.mobileQuickLinks}>
+        {/* Tablet só: no telefone a navegação principal é a barra inferior (MobileBottomNav). */}
+        <Box visibleFrom="sm" hiddenFrom="md" component="div" className={classes.mobileQuickLinks}>
           <NavLink to="/" end className={({ isActive }) => `${classes.mobileQuickLink} ${isActive ? classes.mobileQuickLinkActive : ''}`}>Jogos</NavLink>
           <NavLink to="/prognosticos" className={({ isActive }) => `${classes.mobileQuickLink} ${isActive ? classes.mobileQuickLinkActive : ''}`}>Palpites</NavLink>
           {isLoggedIn && canSeeHistory(plan) && (
@@ -90,7 +95,7 @@ export function Header() {
           )}
           <NavLink to="/planos" className={({ isActive }) => `${classes.mobileQuickLink} ${isActive ? classes.mobileQuickLinkActive : ''}`}>Planos</NavLink>
           <NavLink to="/premium" className={({ isActive }) => `${classes.mobileQuickLink} ${isActive ? classes.mobileQuickLinkActive : ''}`}>VIP</NavLink>
-        </div>
+        </Box>
 
         <Drawer
           opened={opened}
@@ -115,7 +120,9 @@ export function Header() {
                   </Button>
                 )}
                 <Text size="sm" c="dimmed">
-                  Use os atalhos do topo para navegar.
+                  {hasBottomIconsNav
+                    ? 'Navegue pelos ícones na barra inferior. Aqui ficam plano e terminar sessão.'
+                    : 'Use os atalhos logo abaixo do SmartGol para mudar de secção. Aqui ficam plano e sessão.'}
                 </Text>
                 <Text size="sm" c="dimmed">
                   Plano: {plan ? planLabels[plan] ?? plan : '—'}

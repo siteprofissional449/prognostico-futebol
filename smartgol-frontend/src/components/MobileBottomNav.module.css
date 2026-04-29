@@ -15,7 +15,8 @@
   -webkit-backdrop-filter: blur(10px);
 }
 
-@media (max-width: 47.99em) {
+/* theme/breakpoints.ts — themeBreakpoints.sm (48em) */
+@media (max-width: calc(48em - 0.01em)) {
   .bar {
     display: flex;
   }

@@ -98,7 +98,8 @@
   display: inline;
 }
 
-@media (max-width: 47.99em) {
+/* theme/breakpoints.ts — themeBreakpoints.sm */
+@media (max-width: calc(48em - 0.01em)) {
   .tabsListResponsive {
     justify-content: space-between !important;
     flex-wrap: nowrap !important;
