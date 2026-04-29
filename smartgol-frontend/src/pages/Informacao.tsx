@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { Container, Text, Anchor, Stack, Title } from '@mantine/core';
 import type { InformacaoSlug } from '../routes/informacaoRoutes';
+import { InformacaoBody } from '../content/informacaoBodies';
 import {
   INFORMACAO_SLUGS,
   INFORMACAO_TITULOS,
@@ -68,10 +69,7 @@ export function Informacao() {
             </Stack>
           </Stack>
         ) : (
-          <Text size="sm" c="dimmed" lh={1.7}>
-            Conteúdo em atualização. Quando tiveres os textos jurídicos e editoriais finais,
-            substitui esta secção.
-          </Text>
+          <InformacaoBody slug={s} />
         )}
         <Anchor component={Link} to="/" size="sm">
           Voltar ao início
