@@ -7,6 +7,8 @@ interface ImportMetaEnv {
   readonly VITE_SENTRY_DSN?: string;
   /** Data “do dia” do app — alinhar com CRON_TZ no Railway (padrão implícito: America/Sao_Paulo). */
   readonly VITE_APP_TIMEZONE?: string;
+  /** URL pública absoluta para canonical/OG/sitemap manual (sem barra final). Ex.: https://prognostico-futebol.vercel.app */
+  readonly VITE_SITE_URL?: string;
 }
 
 interface ImportMeta {

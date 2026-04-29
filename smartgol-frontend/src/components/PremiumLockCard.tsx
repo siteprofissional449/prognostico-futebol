@@ -2,6 +2,7 @@ import { Card, Text, Group, Button, Stack, ThemeIcon } from '@mantine/core';
 import { IconLock } from '@tabler/icons-react';
 import { Link } from 'react-router-dom';
 import type { PredictionView } from '../types';
+import { buildPalpiteSlug } from '../utils/matchSlug';
 import classes from './GameCard.module.css';
 
 function formatTime(iso: string) {
@@ -13,6 +14,9 @@ function formatTime(iso: string) {
 }
 
 export function PremiumLockCard({ p }: { p: PredictionView }) {
+  const slug = buildPalpiteSlug(p);
+  const seoPath = slug ? `/palpite/${slug}` : null;
+
   return (
     <Card className={classes.card} shadow="sm" padding="lg" radius="md" withBorder opacity={0.92}>
       <Group justify="space-between" mb="xs">
@@ -32,9 +36,16 @@ export function PremiumLockCard({ p }: { p: PredictionView }) {
         <Text size="xs" c="dimmed">
           Assine um plano para ver palpite, odds sugeridas e análise deste jogo.
         </Text>
-        <Button component={Link} to="/planos" variant="light" color="violet" size="sm">
-          Ver mais prognósticos
-        </Button>
+        <Group gap="xs" wrap="wrap">
+          <Button component={Link} to="/planos" variant="light" color="violet" size="sm">
+            Ver mais prognósticos
+          </Button>
+          {seoPath && (
+            <Button component={Link} to={seoPath} variant="default" color="green" size="sm">
+              Página do palpite (resumo SEO)
+            </Button>
+          )}
+        </Group>
       </Stack>
     </Card>
   );

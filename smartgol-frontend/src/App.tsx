@@ -33,6 +33,11 @@ const AdminCommercials = lazy(() =>
 const Informacao = lazy(() =>
   import('./pages/Informacao').then((m) => ({ default: m.Informacao })),
 );
+const MatchPredictionPage = lazy(() =>
+  import('./pages/MatchPredictionPage').then((m) => ({ default: m.MatchPredictionPage })),
+);
+const Equipa = lazy(() => import('./pages/Equipa'));
+const Liga = lazy(() => import('./pages/Liga'));
 
 function PageLoadingFallback() {
   return (
@@ -59,6 +64,9 @@ function App() {
                 <Route path="prognosticos" element={<Prognosticos />} />
                 <Route path="historico" element={<HistoricoAcertos />} />
                 <Route path="informacao/:slug" element={<Informacao />} />
+                <Route path="palpite/:slug" element={<MatchPredictionPage />} />
+                <Route path="equipa/:slug" element={<Equipa />} />
+                <Route path="liga/:slug" element={<Liga />} />
                 <Route path="admin" element={<AdminRouteGuard />}>
                   <Route element={<AdminShell />}>
                     <Route index element={<AdminDashboard />} />

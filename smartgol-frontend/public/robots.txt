@@ -1,0 +1,13 @@
+# Produção — ajustar o nome de domínio se necessário
+
+User-agent: *
+Allow: /
+
+Disallow: /admin
+Disallow: /login
+Disallow: /register
+
+# Rotas apenas para client-side API (referência; crawler normalmente não apanha estas rotas SPA)
+Disallow: /api
+
+Sitemap: https://example.invalid/sitemap.xml

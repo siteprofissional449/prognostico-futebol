@@ -1,7 +1,9 @@
 import { memo, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { Card, Text, Group, Stack } from '@mantine/core';
 import { IconTarget, IconPercentage } from '@tabler/icons-react';
 import type { PredictionView } from '../types';
+import { buildPalpiteSlug } from '../utils/matchSlug';
 import classes from './GameCard.module.css';
 
 function formatProb(p: number) {
@@ -21,9 +23,9 @@ function marketLabel(market: string | null) {
   return market;
 }
 
-type Props = { p: PredictionView };
+type Props = { p: PredictionView; /** Desliga o link para a página /palpite/... */ disableSeoLink?: boolean };
 
-function GameCardInner({ p }: Props) {
+function GameCardInner({ p, disableSeoLink }: Props) {
   const prob = useMemo(() => {
     if (p.probability == null) return 0;
     return typeof p.probability === 'string' ? parseFloat(p.probability) : p.probability;
@@ -33,8 +35,12 @@ function GameCardInner({ p }: Props) {
     return typeof p.odd === 'string' ? parseFloat(p.odd) : p.odd;
   }, [p.odd]);
 
-  return (
-    <Card className={classes.card} shadow="none" padding={0} radius="md" withBorder={false}>
+  const slugPart = buildPalpiteSlug(p);
+  const href =
+    disableSeoLink || !slugPart ? undefined : `/palpite/${slugPart}`;
+
+  const cardInner = (
+    <>
       <p className={classes.league}>{p.league}</p>
       <p className={classes.match}>
         {p.homeTeam} <span style={{ color: '#6b7280', fontWeight: 500 }}>×</span> {p.awayTeam}
@@ -64,8 +70,29 @@ function GameCardInner({ p }: Props) {
           </Stack>
         )}
       </div>
+    </>
+  );
+
+  const cardWrap = (
+    <Card
+      className={classes.card}
+      shadow="none"
+      padding={0}
+      radius="md"
+      withBorder={false}
+    >
+      {cardInner}
     </Card>
   );
+
+  return href ?
+      <Link
+        to={href}
+        style={{ display: 'block', textDecoration: 'none', color: 'inherit' }}
+      >
+        {cardWrap}
+      </Link>
+    : cardWrap;
 }
 
 export const GameCard = memo(GameCardInner);
