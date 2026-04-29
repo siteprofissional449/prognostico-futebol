@@ -7,12 +7,12 @@ import {
   Burger,
   Drawer,
   Stack,
+  Divider,
 } from '@mantine/core';
-import { useDisclosure, useMediaQuery } from '@mantine/hooks';
+import { useDisclosure } from '@mantine/hooks';
 import { IconUser, IconLogin, IconShield } from '@tabler/icons-react';
 import { useAuth } from '../contexts/AuthContext';
 import { canSeeHistory } from '../utils/planAccess';
-import { mediaQueryBelow } from '../theme/breakpoints';
 import classes from './Header.module.css';
 
 const planLabels: Record<string, string> = {
@@ -25,9 +25,7 @@ const planLabels: Record<string, string> = {
 
 export function Header() {
   const { isLoggedIn, plan, isAdmin, logout } = useAuth();
-  const [opened, { open, close }] = useDisclosure(false);
-  /** Igual ao breakpoint `sm` (barra inferior, padding layout, etc.). */
-  const hasBottomIconsNav = useMediaQuery(mediaQueryBelow('sm'));
+  const [opened, { close, toggle }] = useDisclosure(false);
 
   return (
     <header className={classes.header}>
@@ -79,10 +77,11 @@ export function Header() {
 
           <Burger
             opened={opened}
-            onClick={opened ? close : open}
+            onClick={toggle}
             hiddenFrom="md"
             size="sm"
-            aria-label="Abrir menu"
+            aria-label={opened ? 'Fechar menu' : 'Abrir menu'}
+            aria-expanded={opened}
           />
         </Group>
 
@@ -102,12 +101,30 @@ export function Header() {
           onClose={close}
           title="Menu"
           position="right"
-          hiddenFrom="md"
+          size="sm"
+          zIndex={400}
           classNames={{ body: classes.drawerBody }}
+          lockScroll
+          trapFocus
+          withinPortal
         >
-          <Stack gap="sm">
+          <Stack gap="xs">
+            <NavLink to="/" end onClick={close} className={({ isActive }) => `${classes.mobileLink} ${isActive ? classes.mobileLinkActive : ''}`}>Jogos</NavLink>
+            <NavLink to="/prognosticos" onClick={close} className={({ isActive }) => `${classes.mobileLink} ${isActive ? classes.mobileLinkActive : ''}`}>Palpites</NavLink>
+            {isLoggedIn && canSeeHistory(plan) && (
+              <NavLink to="/historico" onClick={close} className={({ isActive }) => `${classes.mobileLink} ${isActive ? classes.mobileLinkActive : ''}`}>Histórico</NavLink>
+            )}
+            <NavLink to="/planos" onClick={close} className={({ isActive }) => `${classes.mobileLink} ${isActive ? classes.mobileLinkActive : ''}`}>Planos</NavLink>
+            <NavLink to="/premium" onClick={close} className={({ isActive }) => `${classes.mobileLink} ${isActive ? classes.mobileLinkActive : ''}`}>VIP</NavLink>
+
+            <Divider
+              my="xs"
+              labelPosition="left"
+              label={<Text size="xs" fw={600} c="dimmed" tt="uppercase">Conta</Text>}
+            />
+
             {isLoggedIn ? (
-              <>
+              <Stack gap="sm">
                 {isAdmin && (
                   <Button
                     component={Link}
@@ -115,24 +132,23 @@ export function Header() {
                     variant="light"
                     color="violet"
                     onClick={close}
+                    leftSection={<IconShield size={16} />}
                   >
-                    Admin
+                    Administrador
                   </Button>
                 )}
-                <Text size="sm" c="dimmed">
-                  {hasBottomIconsNav
-                    ? 'Navegue pelos ícones na barra inferior. Aqui ficam plano e terminar sessão.'
-                    : 'Use os atalhos logo abaixo do SmartGol para mudar de secção. Aqui ficam plano e sessão.'}
-                </Text>
-                <Text size="sm" c="dimmed">
-                  Plano: {plan ? planLabels[plan] ?? plan : '—'}
-                </Text>
+                <Group gap={6} className={classes.planBadge} wrap="nowrap">
+                  <IconUser size={18} />
+                  <Text size="sm" c="dimmed">
+                    Plano: {plan ? planLabels[plan] ?? plan : '—'}
+                  </Text>
+                </Group>
                 <Button variant="light" onClick={() => { close(); logout(); }}>
                   Sair
                 </Button>
-              </>
+              </Stack>
             ) : (
-              <Button component={Link} to="/login" onClick={close} leftSection={<IconLogin size={16} />}>
+              <Button component={Link} to="/login" onClick={close} leftSection={<IconLogin size={16} />} variant="filled" fullWidth>
                 Entrar
               </Button>
             )}
