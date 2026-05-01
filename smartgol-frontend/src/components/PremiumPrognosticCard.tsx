@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Card, Text, Group, Badge, Button, Collapse, Stack } from '@mantine/core';
 import { IconChevronDown, IconChevronUp } from '@tabler/icons-react';
 import type { AdminPrognostic, PrognosticStatus } from '../types';
+import classes from './GameCard.module.css';
 
 const planLabels: Record<string, string> = {
   FREE: 'Grátis',
@@ -45,7 +46,7 @@ export function PremiumPrognosticCard({ row }: { row: AdminPrognostic }) {
   const hasLongAnalysis = (row.analysis?.length ?? 0) > 160;
 
   return (
-    <Card shadow="sm" padding="lg" radius="md" withBorder>
+    <Card className={classes.card} shadow="none" padding="lg" radius="md" withBorder={false}>
       <Group justify="space-between" align="flex-start" wrap="nowrap" gap="sm" mb="xs">
         <div style={{ minWidth: 0 }}>
           <Text fw={700} size="lg" lh={1.3}>
