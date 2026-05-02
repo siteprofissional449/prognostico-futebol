@@ -18,19 +18,57 @@ import {
   IconChartDots,
 } from '@tabler/icons-react';
 import { getHomePredictions } from '../api/predictions';
+import { getPublicManualPrognostics } from '../api/premium';
 import { getResultsOfDay, getTopLeaguesMatches, getMatchDetail, getGenerationInfo } from '../api/football';
 import { LiveMatchesSection } from '../components/LiveMatchesSection';
 import { useAuth } from '../contexts/AuthContext';
 import { GameCard } from '../components/GameCard';
 import { ResultCard } from '../components/ResultCard';
 import { MatchDetailModal } from '../components/MatchDetailModal';
-import type { PredictionView, MatchResult, MatchDetail, GenerationInfo } from '../types';
+import type {
+  PredictionView,
+  MatchResult,
+  MatchDetail,
+  GenerationInfo,
+  AdminPrognostic,
+} from '../types';
 import type { PlanType } from '../types';
 import styles from './Home.module.css';
 import {
   todayYMDInAppTimezone as todayISO,
   addCalendarDaysYMD as addDays,
 } from '../utils/appDate';
+import { slugifyTeam, predictionDateYMD } from '../utils/matchSlug';
+
+function destaqueMatchKey(p: PredictionView): string {
+  const ymd = p.predictionDate?.slice(0, 10) || predictionDateYMD(p);
+  return `${slugifyTeam(p.homeTeam)}|${slugifyTeam(p.awayTeam)}|${ymd}`;
+}
+
+/** Formato compatível com GameCard; `id` prefixado para detetar link para /prognosticos. */
+function adminPrognosticToTeaserView(m: AdminPrognostic): PredictionView {
+  const ymd = m.matchDate.slice(0, 10);
+  return {
+    id: `manual-${m.id}`,
+    matchId: `manual-${m.id}`,
+    homeTeam: m.homeTeam,
+    awayTeam: m.awayTeam,
+    league: 'Palpite manual',
+    startTime: m.matchDate,
+    predictionDate: ymd,
+    minPlan: m.plan,
+    market: m.prediction,
+    probability: m.probability ?? null,
+    odd: m.odd,
+    probHome: null,
+    probDraw: null,
+    probAway: null,
+    bestBet: null,
+    analysis: null,
+    isPremium: false,
+    locked: false,
+  };
+}
 
 function formatDateLabel(dateStr: string): string {
   try {
@@ -91,6 +129,8 @@ export function Home() {
   const [predictionsCur, setPredictionsCur] = useState<PredictionView[]>([]);
   const [predictionsLoading, setPredictionsLoading] = useState(true);
   const [predictionsError, setPredictionsError] = useState<string | null>(null);
+  const [manualTeasers, setManualTeasers] = useState<AdminPrognostic[]>([]);
+  const [manualLoading, setManualLoading] = useState(true);
   const [results, setResults] = useState<MatchResult[]>([]);
   const [resultsLoading, setResultsLoading] = useState(true);
   const [resultsError, setResultsError] = useState<string | null>(null);
@@ -136,6 +176,22 @@ export function Home() {
       });
     return () => { cancelled = true; };
   }, [date, fetchPredictions]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setManualLoading(true);
+    getPublicManualPrognostics({ from: date, to: date })
+      .then((rows) => {
+        if (!cancelled) setManualTeasers(Array.isArray(rows) ? rows : []);
+      })
+      .catch(() => {
+        if (!cancelled) setManualTeasers([]);
+      })
+      .finally(() => {
+        if (!cancelled) setManualLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [date]);
 
   useEffect(() => {
     let cancelled = false;
@@ -188,10 +244,14 @@ export function Home() {
     else if (date > t) setDate(t);
   }, [freePlan, date]);
 
-  const topThree = useMemo(
-    () => predictionsCur.slice(0, 3),
-    [predictionsCur],
-  );
+  const destaqueDiaItems = useMemo(() => {
+    const manualViews = manualTeasers.map(adminPrognosticToTeaserView);
+    const manualKeys = new Set(manualViews.map(destaqueMatchKey));
+    const autoSemDuplicar = predictionsCur.filter((p) => !manualKeys.has(destaqueMatchKey(p)));
+    return [...manualViews, ...autoSemDuplicar].slice(0, 3);
+  }, [manualTeasers, predictionsCur]);
+
+  const destaqueDiaLoading = predictionsLoading || manualLoading;
 
   return (
     <div className={styles.page}>
@@ -283,15 +343,25 @@ export function Home() {
           </UnstyledButton>
         </div>
         {predictionsError && <Alert color="red" p="sm" radius="md" mb="sm">{predictionsError}</Alert>}
-        {predictionsLoading ? (
+        {destaqueDiaLoading ? (
           <LoadingGrid />
-        ) : topThree.length === 0 ? (
+        ) : destaqueDiaItems.length === 0 ? (
           <Text size="sm" c="dimmed" ta="center" py="md">Sem palpites para esta data.</Text>
         ) : (
           <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md">
-            {topThree.map((p) => (
-              <GameCard key={p.id} p={p} />
-            ))}
+            {destaqueDiaItems.map((p) =>
+              p.id.startsWith('manual-') ? (
+                <Link
+                  key={p.id}
+                  to="/prognosticos"
+                  style={{ display: 'block', textDecoration: 'none', color: 'inherit' }}
+                >
+                  <GameCard p={p} disableSeoLink />
+                </Link>
+              ) : (
+                <GameCard key={p.id} p={p} />
+              ),
+            )}
           </SimpleGrid>
         )}
       </section>
