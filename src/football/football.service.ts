@@ -621,6 +621,7 @@ export class FootballService {
       }
       const cap = Math.min(matches.length, this.maxMatchesOddsEnrich);
       const slice = matches.slice(0, cap);
+      const tail = matches.slice(cap);
       const withOdds = await this.enrichMatchesOddsInBatches(slice);
       const withLoadedOdds = withOdds.filter((m) => this.hasOddsPayload(m.odds));
       if (withLoadedOdds.length === 0 && matches.length > 0) {
@@ -635,8 +636,13 @@ export class FootballService {
           `Odds 1×2 carregadas em ${withLoadedOdds.length} de ${withOdds.length} jogos (${date}); incluindo todos para geração (IA onde faltar odd).`,
         );
       }
-      /** Não filtrar só os com payload: isso limitava a N jogos se só N tivessem odds (ex.: 2 de 15). */
-      return withOdds;
+      if (tail.length > 0) {
+        this.logger.log(
+          `Football-Data: ${tail.length} partida(s) além do limite de enriquecimento de odds (${this.maxMatchesOddsEnrich}); incluídas na lista (listagem / IA; sem GET /matches/{id}/odds extra).`,
+        );
+      }
+      /** Não filtrar só os com payload: isso limitava a N jogos se só N tivessem odds (ex.: 2 de 15). Inclui o resto do dia além do cap de odds. */
+      return [...withOdds, ...tail];
     } catch (e) {
       this.logger.warn(
         `Football-Data (matches+odds) falhou para ${date}: ${

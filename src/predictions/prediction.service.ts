@@ -23,11 +23,16 @@ export type PredictionMarket =
   | 'CORNERS_OVER'
   | 'CORNERS_UNDER';
 
-/** Odd mínima publicada (regra conservadora; configurável). */
+/**
+ * Odd mínima para gravar/publicar palpite (configurável via MIN_PREDICTION_ODD).
+ * Por defeito 1.01 — inclui favoritos (ex. 1.20) e não corta a lista de jogos por “odd baixa”.
+ * Para o comportamento antigo (só picks com odd ≥ 1.65), defina MIN_PREDICTION_ODD=1.65.
+ */
+const _envMinOdd = Number(process.env.MIN_PREDICTION_ODD);
 const MIN_PUBLISHED_ODD =
-  Number(process.env.MIN_PREDICTION_ODD) > 1
-    ? Number(process.env.MIN_PREDICTION_ODD)
-    : 1.65;
+  Number.isFinite(_envMinOdd) && _envMinOdd >= 1.01
+    ? Math.min(_envMinOdd, 50)
+    : 1.01;
 const BATCH_MAX_MATCHES =
   Number(process.env.BATCH_MAX_MATCHES) > 0
     ? Number(process.env.BATCH_MAX_MATCHES)
@@ -516,7 +521,7 @@ export class PredictionService {
 
   /**
    * Uma chamada OpenAI com as partidas do dia: escolhe poucos jogos + um mercado conservador
-   * (1X2, totais 2.5, cantos) com odd na API ≥ MIN_PUBLISHED_ODD.
+   * (1X2, totais 2.5, cantos) com odd na API ≥ MIN_PUBLISHED_ODD (por defeito quase sem corte).
    */
   private async generateConservativeBatchWithAi(
     matches: ApiMatch[],
