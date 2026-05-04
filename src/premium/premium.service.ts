@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import {
@@ -19,27 +20,31 @@ function prognosticRequiredTier(plan: string): number {
   return PLAN_ORDER[p] ?? PLAN_ORDER[PrognosticPlan.PREMIUM];
 }
 
-function localDateKey(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+/**
+ * Data de calendário do `matchDate` no mesmo fuso que o frontend (`CRON_TZ` / VITE_APP_TIMEZONE).
+ * Evita sumir palpites à noite no Brasil quando o servidor está em UTC.
+ */
+function matchDateYmdInAppTimezone(d: Date, timeZone: string): string {
+  return new Date(d.getTime()).toLocaleDateString('sv-SE', { timeZone });
 }
 
 function applyDateRange(
   list: Prognostic[],
-  from?: string,
-  to?: string,
+  from: string | undefined,
+  to: string | undefined,
+  timeZone: string,
 ): Prognostic[] {
   let out = list;
   if (from) {
     out = out.filter(
-      (row) => localDateKey(new Date(row.matchDate)) >= from,
+      (row) =>
+        matchDateYmdInAppTimezone(new Date(row.matchDate), timeZone) >= from,
     );
   }
   if (to) {
     out = out.filter(
-      (row) => localDateKey(new Date(row.matchDate)) <= to,
+      (row) =>
+        matchDateYmdInAppTimezone(new Date(row.matchDate), timeZone) <= to,
     );
   }
   return out;
@@ -47,10 +52,16 @@ function applyDateRange(
 
 @Injectable()
 export class PremiumService {
+  private readonly appTimeZone: string;
+
   constructor(
+    private readonly config: ConfigService,
     @InjectRepository(Prognostic)
     private readonly prognosticRepo: Repository<Prognostic>,
-  ) {}
+  ) {
+    this.appTimeZone =
+      this.config.get<string>('CRON_TZ') || 'America/Sao_Paulo';
+  }
 
   /**
    * Assinantes: palpites manuais **pagos** (plano mínimo ≥ Diário). Os só **grátis**
@@ -71,7 +82,7 @@ export class PremiumService {
       const required = prognosticRequiredTier(String(row.plan));
       return required <= tier;
     });
-    return applyDateRange(list, from, to);
+    return applyDateRange(list, from, to, this.appTimeZone);
   }
 
   /** Palpites manuais marcados como grátis — qualquer visitante (com ou sem login). */
@@ -83,7 +94,7 @@ export class PremiumService {
       where: { plan: PrognosticPlan.FREE },
       order: { matchDate: 'DESC', createdAt: 'DESC' },
     });
-    return applyDateRange(list, from, to);
+    return applyDateRange(list, from, to, this.appTimeZone);
   }
 
 }
