@@ -9,6 +9,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import axios, { isAxiosError } from 'axios';
 import { FootballService, ApiMatch } from '../football/football.service';
+import {
+  MatchPreMatchAnalysisService,
+  MatchPreMatchAnalysisDto,
+} from '../football/match-prematch-analysis.service';
 import { GenerationMeta } from '../football/generation-meta.entity';
 import { PredictionsService, FREE_PREDICTION_SLOTS } from './predictions.service';
 import { Prediction, PlanType } from './prediction.entity';
@@ -47,6 +51,21 @@ const MIN_DAILY_PREDICTIONS =
     ? Number(process.env.MIN_DAILY_PREDICTIONS)
     : 52;
 const MIN_CONFIDENCE_AI = 58;
+
+/**
+ * Máx. de dossiers pré-jogo (football-data) por corrida de geração — cada um ≈ vários GET.
+ * 0 = desativa dossier nos prompts. Variável: PREMATCH_AI_MAX_PER_RUN.
+ */
+const _prematchMax = Number(process.env.PREMATCH_AI_MAX_PER_RUN);
+const PREMATCH_AI_MAX_PER_RUN =
+  Number.isFinite(_prematchMax) && _prematchMax >= 0 ? Math.min(Math.floor(_prematchMax), 200) : 48;
+
+/** Quantas partidas do início do lote recebem `dossier` no JSON do lote conservador. */
+const _batchDigest = Number(process.env.BATCH_PREMATCH_DIGEST_COUNT);
+const BATCH_PREMATCH_DIGEST_COUNT =
+  Number.isFinite(_batchDigest) && _batchDigest >= 0 ?
+    Math.min(Math.floor(_batchDigest), 80)
+  : 12;
 
 interface AiBatchPick {
   matchId: number;
@@ -96,12 +115,15 @@ export class PredictionService {
   private readonly logger = new Logger(PredictionService.name);
   private readonly openAiKey: string;
   private readonly openAiModel: string;
+  /** Pedidos restantes para GET dossier (football-data) nesta execução de `generateDailyPredictions`. */
+  private prematchBudgetRemaining = 0;
 
   constructor(
     private readonly config: ConfigService,
     private readonly predictionsService: PredictionsService,
     @Inject(forwardRef(() => FootballService))
     private readonly football: FootballService,
+    private readonly matchPrematch: MatchPreMatchAnalysisService,
     @InjectRepository(GenerationMeta)
     private readonly generationMetaRepo: Repository<GenerationMeta>,
   ) {
@@ -121,6 +143,8 @@ export class PredictionService {
       trimmed ||
       new Date().toLocaleDateString('sv-SE', { timeZone: tz });
     this.logger.log(`Iniciando geração de prognósticos para ${targetDate}`);
+
+    this.prematchBudgetRemaining = PREMATCH_AI_MAX_PER_RUN;
 
     const matches = await this.football.getUpcomingMatchesForDate(targetDate);
     if (!matches.length) {
@@ -377,6 +401,8 @@ export class PredictionService {
         ? `Dados de odds 1X2 (referência): ${JSON.stringify(odds)}`
         : 'Não há odds 1X2 disponíveis para este jogo na API; estime probabilidades com base em contexto geral do confronto (sem inventar odds numéricas).';
 
+    const dossierLine = await this.loadPrematchDigest(match.id);
+
     const userPrompt = [
       'Você é um especialista em análise de futebol e apostas esportivas.',
       '',
@@ -385,10 +411,13 @@ export class PredictionService {
       'Considere:',
       '',
       '* Probabilidades (odds)',
-      '* Forma recente',
-      '* Equilíbrio do confronto',
+      '* Forma recente e classificação (se houver bloco "dossier" abaixo)',
+      '* Equilíbrio do confronto e confrontos diretos (se no dossier)',
       '',
       oddsLine,
+      ...(dossierLine ?
+        ['', 'Dossier estatístico (API football-data, resumo — pode omitir campos vazios):', dossierLine, '']
+      : []),
       '',
       'Responda SOMENTE em JSON no formato:',
       '',
@@ -530,17 +559,24 @@ export class PredictionService {
     if (!this.openAiKey) return [];
 
     const slice = matches.slice(0, BATCH_MAX_MATCHES);
-    const partidas = slice.map((m) => ({
-      id: m.id,
-      homeTeam: m.homeTeam?.name ?? 'Mandante',
-      awayTeam: m.awayTeam?.name ?? 'Visitante',
-      league: m.competition?.name ?? '—',
-      utcDate: m.utcDate,
-      odds: this.football.getExtendedOddsMap(m),
-    }));
+    const dossierByMatch = await this.buildBatchPrematchDigestMap(slice);
+    const partidas = slice.map((m) => {
+      const row: Record<string, unknown> = {
+        id: m.id,
+        homeTeam: m.homeTeam?.name ?? 'Mandante',
+        awayTeam: m.awayTeam?.name ?? 'Visitante',
+        league: m.competition?.name ?? '—',
+        utcDate: m.utcDate,
+        odds: this.football.getExtendedOddsMap(m),
+      };
+      const d = dossierByMatch.get(m.id);
+      if (d) row.dossier = d;
+      return row;
+    });
 
     const system = [
       'És um analista de futebol conservador. Recebes JSON com partidas e odds parciais da API.',
+      'Algumas partidas podem incluir o campo opcional "dossier" (resumo: classificação, forma, H2H). Usa-o junto com as odds; não inventes números que não apareçam no dossier nem nas odds.',
       'Deves devolver APENAS JSON (objeto com chave "picks" array).',
       '',
       'Regras:',
@@ -1111,6 +1147,105 @@ export class PredictionService {
       }
       if (!addedThisPass) break;
     }
+  }
+
+  /**
+   * Busca dossier pré-jogo e consome 1 unidade do orçamento diário (após sucesso).
+   */
+  private async loadPrematchDigest(matchId: number): Promise<string | null> {
+    if (PREMATCH_AI_MAX_PER_RUN <= 0 || this.prematchBudgetRemaining <= 0) {
+      return null;
+    }
+    try {
+      const full = await this.matchPrematch.getPreMatchAnalysis(matchId);
+      if (!full) return null;
+      this.prematchBudgetRemaining -= 1;
+      return this.compactPrematchForAi(full);
+    } catch (e) {
+      this.logger.debug(
+        `Dossier pré-jogo omitido (${matchId}): ${
+          e instanceof Error ? e.message : e
+        }`,
+      );
+      return null;
+    }
+  }
+
+  /** Resumo compacto para prompt (limite de caracteres). */
+  private compactPrematchForAi(a: MatchPreMatchAnalysisDto): string {
+    const row = (t: MatchPreMatchAnalysisDto['home']['table']) =>
+      t && t.position != null ?
+        {
+          pos: t.position,
+          J: t.playedGames,
+          pts: t.points,
+          gf_j: t.avgGoalsFor,
+          gs_j: t.avgGoalsAgainst,
+        }
+      : null;
+    const split = (t: MatchPreMatchAnalysisDto['home']['homeSplit']) =>
+      t && t.position != null ?
+        {
+          pos: t.position,
+          J: t.playedGames,
+          golos: `${t.goalsFor ?? '?'}-${t.goalsAgainst ?? '?'}`,
+        }
+      : null;
+    const form = (f: MatchPreMatchAnalysisDto['home']['formLast5']) =>
+      f.map((x) => ({
+        r: x.result,
+        pl: `${x.teamScore}-${x.opponentScore}`,
+        adv: x.opponent.slice(0, 28),
+        c: x.isHome,
+      }));
+    const slim = {
+      competicao: a.competition,
+      mandante: {
+        tabela: row(a.home.table),
+        em_casa: split(a.home.homeSplit),
+        como_visit: split(a.home.awaySplit),
+        ultimos5: form(a.home.formLast5),
+      },
+      visitante: {
+        tabela: row(a.away.table),
+        em_casa: split(a.away.homeSplit),
+        como_visit: split(a.away.awaySplit),
+        ultimos5: form(a.away.formLast5),
+      },
+      h2h: {
+        v_e_d_mandante_atual: `${a.headToHead.homeWins}-${a.headToHead.draws}-${a.headToHead.awayWins}`,
+        ultimos: a.headToHead.matches.slice(0, 5).map((m) => ({
+          data: m.utcDate.slice(0, 10),
+          j: `${m.homeTeam.slice(0, 22)} ${m.homeScore}-${m.awayScore} ${m.awayTeam.slice(0, 22)}`,
+        })),
+      },
+      onze: {
+        casa:
+          a.home.lineup?.length ?
+            a.home.lineup.slice(0, 11).map((p) => p.name)
+          : null,
+        fora:
+          a.away.lineup?.length ?
+            a.away.lineup.slice(0, 11).map((p) => p.name)
+          : null,
+      },
+    };
+    let s = JSON.stringify(slim);
+    const max = 3400;
+    if (s.length > max) s = `${s.slice(0, max - 3)}...`;
+    return s;
+  }
+
+  private async buildBatchPrematchDigestMap(
+    slice: ApiMatch[],
+  ): Promise<Map<number, string>> {
+    const map = new Map<number, string>();
+    const top = slice.slice(0, BATCH_PREMATCH_DIGEST_COUNT);
+    for (const m of top) {
+      const d = await this.loadPrematchDigest(m.id);
+      if (d) map.set(m.id, d);
+    }
+    return map;
   }
 
   private normalizeTriplet(

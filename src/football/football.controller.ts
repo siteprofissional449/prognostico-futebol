@@ -1,9 +1,13 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
 import { FootballService } from './football.service';
+import { MatchPreMatchAnalysisService } from './match-prematch-analysis.service';
 
 @Controller('football')
 export class FootballController {
-  constructor(private readonly footballService: FootballService) {}
+  constructor(
+    private readonly footballService: FootballService,
+    private readonly matchPreMatchAnalysis: MatchPreMatchAnalysisService,
+  ) {}
 
   /** Última geração de prognósticos + texto do agendamento automático (público). */
   @Get('generation-info')
@@ -29,6 +33,15 @@ export class FootballController {
   @Get('live')
   live() {
     return this.footballService.getLiveSnapshot();
+  }
+
+  /**
+   * Contexto estatístico para análise (classificação, forma, H2H, casa/fora, médias de golos).
+   * Escalações só quando a API as publicar; desfalques não vêm desta fonte.
+   */
+  @Get('matches/:id/prematch-analysis')
+  async prematchAnalysis(@Param('id') id: string) {
+    return this.matchPreMatchAnalysis.getPreMatchAnalysis(parseInt(id, 10));
   }
 
   /** Detalhe/estatísticas de um jogo */

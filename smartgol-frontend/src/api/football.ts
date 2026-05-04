@@ -1,5 +1,11 @@
 import { api } from './client';
-import type { MatchResult, MatchDetail, GenerationInfo, LiveMatchInfo } from '../types';
+import type {
+  MatchResult,
+  MatchDetail,
+  GenerationInfo,
+  LiveMatchInfo,
+  MatchPreMatchAnalysis,
+} from '../types';
 
 /** Última geração automática + horário do agendamento (público). */
 export async function getGenerationInfo(): Promise<GenerationInfo> {
@@ -18,6 +24,13 @@ export async function getTopLeaguesMatches(date?: string): Promise<MatchResult[]
 
 export async function getMatchDetail(matchId: number): Promise<MatchDetail | null> {
   return api<MatchDetail | null>(`/football/matches/${matchId}`);
+}
+
+/** Classificação, forma, H2H, médias de golos, escalações (quando existirem). */
+export async function getMatchPrematchAnalysis(
+  matchId: number,
+): Promise<MatchPreMatchAnalysis | null> {
+  return api<MatchPreMatchAnalysis | null>(`/football/matches/${matchId}/prematch-analysis`);
 }
 
 /** Jogos IN_PLAY/PAUSED (placar ~1 min, cache no backend). */

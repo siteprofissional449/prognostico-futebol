@@ -168,6 +168,78 @@ export interface MatchDetail extends MatchResult {
   stage?: string;
 }
 
+/** GET /football/matches/:id/prematch-analysis — dossier estatístico pré-jogo. */
+export interface TeamTableRow {
+  position: number | null;
+  playedGames: number | null;
+  points: number | null;
+  won: number | null;
+  draw: number | null;
+  lost: number | null;
+  goalsFor: number | null;
+  goalsAgainst: number | null;
+  avgGoalsFor: number | null;
+  avgGoalsAgainst: number | null;
+}
+
+export interface FormMatchRow {
+  utcDate: string;
+  opponent: string;
+  isHome: boolean;
+  teamScore: number;
+  opponentScore: number;
+  result: 'W' | 'D' | 'L';
+  competition: string;
+}
+
+export interface H2HMatchRow {
+  utcDate: string;
+  homeTeam: string;
+  awayTeam: string;
+  homeScore: number;
+  awayScore: number;
+}
+
+export interface LineupPlayer {
+  name: string;
+  position: string | null;
+  shirtNumber: number | null;
+}
+
+export interface TeamPreMatchSide {
+  teamId: number | null;
+  name: string;
+  table: TeamTableRow | null;
+  homeSplit: TeamTableRow | null;
+  awaySplit: TeamTableRow | null;
+  formLast5: FormMatchRow[];
+  lineup: LineupPlayer[] | null;
+}
+
+export interface HeadToHeadBlock {
+  matches: H2HMatchRow[];
+  homeWins: number;
+  draws: number;
+  awayWins: number;
+}
+
+export interface AbsencePlaceholder {
+  side: 'HOME' | 'AWAY';
+  note: string;
+}
+
+export interface MatchPreMatchAnalysis {
+  matchId: number;
+  status: string | null;
+  competition: string;
+  competitionCode: string | null;
+  home: TeamPreMatchSide;
+  away: TeamPreMatchSide;
+  headToHead: HeadToHeadBlock;
+  absences: AbsencePlaceholder[];
+  dataSourceNote: string;
+}
+
 /** Comercial ativo para o banner (carousel). */
 export interface CommercialPublic {
   id: string;

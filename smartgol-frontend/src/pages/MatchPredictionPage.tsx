@@ -6,11 +6,14 @@ import { Link, Navigate, useParams } from 'react-router-dom';
 import {
   Alert,
   Anchor,
+  Badge,
   Divider,
   Group,
+  List,
   Loader,
   Paper,
   Stack,
+  Table,
   Text,
 } from '@mantine/core';
 import {
@@ -18,8 +21,8 @@ import {
   getMyPredictionsList,
   getPublicPredictionsList,
 } from '../api/predictions';
-import { getMatchDetail } from '../api/football';
-import type { MatchDetail, PredictionView } from '../types';
+import { getMatchDetail, getMatchPrematchAnalysis } from '../api/football';
+import type { MatchDetail, MatchPreMatchAnalysis, PredictionView, TeamTableRow } from '../types';
 import { buildPalpiteSlug, parsePalpiteSlug, type ParsedSlug } from '../utils/matchSlug';
 import { predictionMatchesSlug } from '../utils/predictionSlugMatch';
 import { formatProb, marketLabel } from '../utils/predictionLabels';
@@ -69,6 +72,222 @@ function formatKickoff(iso: string) {
   }
 }
 
+function formatShortDate(iso: string) {
+  try {
+    return new Date(iso).toLocaleDateString('pt-BR', { dateStyle: 'short' });
+  } catch {
+    return iso;
+  }
+}
+
+function tableRowLabel(t: TeamTableRow | null): string {
+  if (!t || t.position == null) return '—';
+  const pts = t.points != null ? `${t.points} pts` : '';
+  const j = t.playedGames != null ? `${t.playedGames} jogos` : '';
+  const mg =
+    t.avgGoalsFor != null && t.avgGoalsAgainst != null ?
+      ` · ${t.avgGoalsFor} golos/j marcados, ${t.avgGoalsAgainst} sofridos`
+    : '';
+  return `${t.position}º lugar (${[j, pts].filter(Boolean).join(', ')})${mg}`;
+}
+
+function splitVenueLabel(side: 'HOME' | 'AWAY', name: string, row: TeamTableRow | null) {
+  if (!row || row.position == null) {
+    return (
+      <Text size="xs" c="dimmed">
+        Sub-tabela {side === 'HOME' ? 'em casa' : 'fora'} indisponível (ex.: taça sem tabela ou API sem dados).
+      </Text>
+    );
+  }
+  const scope = side === 'HOME' ? 'como mandante' : 'como visitante';
+  return (
+    <Text size="xs" c="dimmed">
+      {name} {scope}: {row.position}º · {row.playedGames ?? '—'} J · {row.points ?? '—'} pts ·
+      golos {row.goalsFor ?? '—'}-{row.goalsAgainst ?? '—'}
+      {row.avgGoalsFor != null && row.avgGoalsAgainst != null ?
+        ` (~${row.avgGoalsFor} marcados / ~${row.avgGoalsAgainst} sofridos por jogo neste recorte)`
+      : null}
+      .
+    </Text>
+  );
+}
+
+function PreMatchDossierBlock({ data }: { data: MatchPreMatchAnalysis }) {
+  const badge = (r: 'W' | 'D' | 'L') =>
+    r === 'W' ?
+      <Badge color="green" variant="light" size="sm">V</Badge>
+    : r === 'L' ?
+      <Badge color="red" variant="light" size="sm">D</Badge>
+    : <Badge color="gray" variant="light" size="sm">E</Badge>;
+
+  return (
+    <Stack gap="md">
+      <div>
+        <Text size="xs" fw={700} className={styles.sectionTitle} tt="uppercase" mb={6}>
+          Posição na tabela ({data.competition})
+        </Text>
+        <Stack gap="xs">
+          <Paper p="sm" withBorder style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
+            <Text size="sm" fw={700}>
+              {data.home.name}
+            </Text>
+            <Text size="xs" c="dimmed" mt={4}>
+              Geral: {tableRowLabel(data.home.table)}
+            </Text>
+          </Paper>
+          <Paper p="sm" withBorder style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
+            <Text size="sm" fw={700}>
+              {data.away.name}
+            </Text>
+            <Text size="xs" c="dimmed" mt={4}>
+              Geral: {tableRowLabel(data.away.table)}
+            </Text>
+          </Paper>
+        </Stack>
+      </div>
+
+      <div>
+        <Text size="xs" fw={700} className={styles.sectionTitle} tt="uppercase" mb={6}>
+          Últimos 5 jogos (forma)
+        </Text>
+        <Stack gap="sm">
+          <div>
+            <Text size="xs" fw={600} mb={4}>
+              {data.home.name}
+            </Text>
+            {data.home.formLast5.length === 0 ?
+              <Text size="xs" c="dimmed">
+                Sem histórico recente na resposta da API.
+              </Text>
+            : (
+              <Stack gap={4}>
+                {data.home.formLast5.map((f, i) => (
+                  <Group key={`hf-${i}`} gap="xs" wrap="nowrap" align="flex-start">
+                    {badge(f.result)}
+                    <Text size="xs" c="dimmed" style={{ flex: 1 }}>
+                      {formatShortDate(f.utcDate)} · {f.isHome ? 'C' : 'F'} vs {f.opponent} ·{' '}
+                      {f.teamScore}-{f.opponentScore} · {f.competition}
+                    </Text>
+                  </Group>
+                ))}
+              </Stack>
+            )}
+          </div>
+          <div>
+            <Text size="xs" fw={600} mb={4}>
+              {data.away.name}
+            </Text>
+            {data.away.formLast5.length === 0 ?
+              <Text size="xs" c="dimmed">
+                Sem histórico recente na resposta da API.
+              </Text>
+            : (
+              <Stack gap={4}>
+                {data.away.formLast5.map((f, i) => (
+                  <Group key={`af-${i}`} gap="xs" wrap="nowrap" align="flex-start">
+                    {badge(f.result)}
+                    <Text size="xs" c="dimmed" style={{ flex: 1 }}>
+                      {formatShortDate(f.utcDate)} · {f.isHome ? 'C' : 'F'} vs {f.opponent} ·{' '}
+                      {f.teamScore}-{f.opponentScore} · {f.competition}
+                    </Text>
+                  </Group>
+                ))}
+              </Stack>
+            )}
+          </div>
+        </Stack>
+      </div>
+
+      <div>
+        <Text size="xs" fw={700} className={styles.sectionTitle} tt="uppercase" mb={6}>
+          Desempenho casa / fora (liga)
+        </Text>
+        <Stack gap="xs">
+          <div>
+            <Text size="sm" fw={600}>
+              {data.home.name}
+            </Text>
+            {splitVenueLabel('HOME', data.home.name, data.home.homeSplit)}
+            {splitVenueLabel('AWAY', data.home.name, data.home.awaySplit)}
+          </div>
+          <div>
+            <Text size="sm" fw={600}>
+              {data.away.name}
+            </Text>
+            {splitVenueLabel('HOME', data.away.name, data.away.homeSplit)}
+            {splitVenueLabel('AWAY', data.away.name, data.away.awaySplit)}
+          </div>
+        </Stack>
+      </div>
+
+      <div>
+        <Text size="xs" fw={700} className={styles.sectionTitle} tt="uppercase" mb={6}>
+          Escalações (quando a fonte as publica)
+        </Text>
+        <Stack gap="xs">
+          <div>
+            <Text size="xs" fw={600} mb={4}>
+              {data.home.name}
+            </Text>
+            {!data.home.lineup || data.home.lineup.length === 0 ?
+              <Text size="xs" c="dimmed">
+                Ainda sem onze inicial nesta fonte — costuma aparecer perto do apito.
+              </Text>
+            : (
+              <List size="xs" c="dimmed" spacing={4} center>
+                {data.home.lineup.map((p, i) => (
+                  <List.Item key={`hl-${i}`}>
+                    {p.name}
+                    {p.position ? ` · ${p.position}` : ''}
+                    {p.shirtNumber != null ? ` · #${p.shirtNumber}` : ''}
+                  </List.Item>
+                ))}
+              </List>
+            )}
+          </div>
+          <div>
+            <Text size="xs" fw={600} mb={4}>
+              {data.away.name}
+            </Text>
+            {!data.away.lineup || data.away.lineup.length === 0 ?
+              <Text size="xs" c="dimmed">
+                Ainda sem onze inicial nesta fonte — costuma aparecer perto do apito.
+              </Text>
+            : (
+              <List size="xs" c="dimmed" spacing={4} center>
+                {data.away.lineup.map((p, i) => (
+                  <List.Item key={`al-${i}`}>
+                    {p.name}
+                    {p.position ? ` · ${p.position}` : ''}
+                    {p.shirtNumber != null ? ` · #${p.shirtNumber}` : ''}
+                  </List.Item>
+                ))}
+              </List>
+            )}
+          </div>
+        </Stack>
+      </div>
+
+      <div>
+        <Text size="xs" fw={700} className={styles.sectionTitle} tt="uppercase" mb={6}>
+          Desfalques (lesões / suspensões)
+        </Text>
+        <Stack gap={4}>
+          {data.absences.map((a, i) => (
+            <Text key={`ab-${i}`} size="xs" c="dimmed">
+              <strong>{a.side === 'HOME' ? 'Mandante' : 'Visitante'}:</strong> {a.note}
+            </Text>
+          ))}
+        </Stack>
+      </div>
+
+      <Text size="xs" c="dimmed" style={{ opacity: 0.85 }}>
+        {data.dataSourceNote}
+      </Text>
+    </Stack>
+  );
+}
+
 export function MatchPredictionPage() {
   const { slug } = useParams<{ slug: string }>();
   const { isLoggedIn, plan } = useAuth();
@@ -79,6 +298,9 @@ export function MatchPredictionPage() {
   const [notFound, setNotFound] = useState(false);
   const [matchDetail, setMatchDetail] = useState<MatchDetail | null>(null);
   const [detailErr, setDetailErr] = useState(false);
+  const [preMatch, setPreMatch] = useState<MatchPreMatchAnalysis | null>(null);
+  const [preMatchLoading, setPreMatchLoading] = useState(false);
+  const [preMatchErr, setPreMatchErr] = useState(false);
 
   const seoInput = useMemo(() => {
     if (!prediction) return null;
@@ -149,6 +371,32 @@ export function MatchPredictionPage() {
       cancelled = true;
     };
   }, [prediction]);
+
+  useEffect(() => {
+    if (!prediction?.matchId) {
+      setPreMatch(null);
+      return;
+    }
+    const id = Number.parseInt(prediction.matchId, 10);
+    if (!Number.isFinite(id)) return;
+
+    let cancelled = false;
+    setPreMatchErr(false);
+    setPreMatchLoading(true);
+    getMatchPrematchAnalysis(id)
+      .then((d) => {
+        if (!cancelled) setPreMatch(d);
+      })
+      .catch(() => {
+        if (!cancelled) setPreMatchErr(true);
+      })
+      .finally(() => {
+        if (!cancelled) setPreMatchLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [prediction?.matchId]);
 
   const generatedAnalysis = useMemo(() => {
     if (!prediction) return [];
@@ -282,6 +530,77 @@ export function MatchPredictionPage() {
 
         <Divider color="dark.6" variant="dashed" my={4} />
 
+        <section aria-labelledby="sec-dossier">
+          <h2 id="sec-dossier" className={styles.h2Semantic}>
+            Dossiê de dados (pré-jogo)
+          </h2>
+          <p className={styles.paraMuted}>
+            Classificação, forma recente, confrontos diretos, médias de golos e recorte casa/fora
+            (quando a competição publica tabelas). Escalações surgem quando a API as disponibiliza.
+          </p>
+          {preMatchLoading && (
+            <Group justify="center" py="md">
+              <Loader size="sm" color="green" />
+            </Group>
+          )}
+          {preMatchErr && (
+            <Text size="sm" c="dimmed">
+              Não foi possível carregar o dossier estatístico agora.
+            </Text>
+          )}
+          {preMatch && <PreMatchDossierBlock data={preMatch} />}
+        </section>
+
+        <Divider color="dark.6" variant="dashed" my={4} />
+
+        <section aria-labelledby="sec-h2h-dados">
+          <h2 id="sec-h2h-dados" className={styles.h2Semantic}>
+            Confrontos diretos (H2H)
+          </h2>
+          {preMatch && preMatch.headToHead.matches.length > 0 ?
+            <Stack gap="sm">
+              <Text size="xs" c="dimmed">
+                Nos últimos {preMatch.headToHead.matches.length} encontros contabilizados:{' '}
+                <strong>{prediction.homeTeam.trim()}</strong>{' '}
+                {preMatch.headToHead.homeWins} vitórias · {preMatch.headToHead.draws} empates ·{' '}
+                <strong>{prediction.awayTeam.trim()}</strong> {preMatch.headToHead.awayWins} vitórias
+                (perspetiva do jogo atual).
+              </Text>
+              <Table striped highlightOnHover withTableBorder withColumnBorders>
+                <Table.Thead>
+                  <Table.Tr>
+                    <Table.Th>Data</Table.Th>
+                    <Table.Th>Casa</Table.Th>
+                    <Table.Th>Resultado</Table.Th>
+                    <Table.Th>Fora</Table.Th>
+                  </Table.Tr>
+                </Table.Thead>
+                <Table.Tbody>
+                  {preMatch.headToHead.matches.map((m, i) => (
+                    <Table.Tr key={`h2h-${i}`}>
+                      <Table.Td style={{ whiteSpace: 'nowrap' }}>{formatShortDate(m.utcDate)}</Table.Td>
+                      <Table.Td>{m.homeTeam}</Table.Td>
+                      <Table.Td>
+                        {m.homeScore} × {m.awayScore}
+                      </Table.Td>
+                      <Table.Td>{m.awayTeam}</Table.Td>
+                    </Table.Tr>
+                  ))}
+                </Table.Tbody>
+              </Table>
+            </Stack>
+          : (
+            <p className={styles.paraMuted}>
+              {generateH2HNarrativeParagraph(
+                prediction.homeTeam.trim(),
+                prediction.awayTeam.trim(),
+              )}
+            </p>
+          )}
+        </section>
+
+        <Divider color="dark.6" variant="dashed" my={4} />
+
         <section aria-labelledby="sec-stats">
           <h2 id="sec-stats" className={styles.h2Semantic}>
             Estatísticas e momento das equipas
@@ -371,17 +690,6 @@ export function MatchPredictionPage() {
               </Group>
             </Paper>
           )}
-        </section>
-
-        <Divider color="dark.6" variant="dashed" my={4} />
-
-        <section aria-labelledby="sec-h2h">
-          <h2 id="sec-h2h" className={styles.h2Semantic}>
-            Histórico de confrontos diretos (H2H)
-          </h2>
-          <p className={styles.paraMuted}>
-            {generateH2HNarrativeParagraph(prediction.homeTeam.trim(), prediction.awayTeam.trim())}
-          </p>
         </section>
 
         <Divider color="dark.6" variant="dashed" my={4} />
